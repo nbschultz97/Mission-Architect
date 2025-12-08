@@ -24,6 +24,8 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 16px;
   padding: 20px;
 }
 
@@ -55,6 +57,32 @@ body {
 }
 
 a { color: var(--accent); }
+
+.demo-request {
+  margin: 18px auto 0;
+  padding: 18px;
+  max-width: 980px;
+  background: #0c171d;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.demo-request-inner { display: grid; gap: 12px; }
+
+.demo-request h2 { margin: 0; font-size: 1.35rem; }
+
+.demo-request p { margin: 0; line-height: 1.5; color: var(--muted); }
+
+.demo-request-actions { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+
+.demo-request-btn { text-decoration: none; }
+
+.demo-request-email { margin: 0; }
+
+@media (min-width: 640px) {
+  .demo-request-actions { flex-direction: row; align-items: center; gap: 14px; }
+}
 
 .top-nav {
   display: flex;
