@@ -7,128 +7,185 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top-nav">
-    <div class="branding">
-      <div class="title">Ceradon Mission Architect</div>
-      <div class="subtitle">Mission-level planner for Ceradon Architect Stack</div>
+  <div id="access-gate" style="display: none;">
+    <div class="gate-card">
+      <h1>Ceradon Systems — Ceradon Mission Architect Demo</h1>
+      <p class="gate-subtitle">Enter your demo access code to continue.</p>
+      <label for="demo-code">Access code</label>
+      <input id="demo-code" type="password" autocomplete="off" placeholder="Enter access code">
+      <button id="demo-enter" class="primary-btn">Enter</button>
+      <div id="demo-error" class="error-message">Invalid code.</div>
     </div>
-    <nav class="nav-tabs">
-      <button class="nav-btn" data-target="setup">Mission Setup</button>
-      <button class="nav-btn" data-target="phases">Phases</button>
-      <button class="nav-btn" data-target="assets">Assets &amp; Assignment</button>
-      <button class="nav-btn" data-target="constraints">Constraints</button>
-      <button class="nav-btn" data-target="brief">Mission Brief / Export</button>
-    </nav>
-    <button id="loadExampleBtn" class="accent-btn">Load Example Mission</button>
-  </header>
+  </div>
 
-  <main>
-    <section id="setup" class="panel active">
-      <h2>Mission Setup</h2>
-      <div class="grid two-col">
-        <label>Mission Name<input id="missionName" type="text" placeholder="Mission name"></label>
-        <label>Mission Type
-          <select id="missionType">
-            <option>Recon</option>
-            <option>Mesh Lane</option>
-            <option>Resupply</option>
-            <option>UxS Test</option>
-            <option>Custom</option>
-          </select>
-        </label>
-        <label>AO / Location<input id="missionAo" type="text" placeholder="Area of operations"></label>
-        <label>Unit / Detachment<input id="missionUnit" type="text" placeholder="Unit or detachment"></label>
-        <label>Classification Banner<input id="missionBanner" type="text" value="UNCLASSIFIED // TRAINING USE"></label>
-        <label>Date / Time Window<input id="missionTime" type="text" placeholder="H+0 to H+72"></label>
-        <label>Created By<input id="missionCreator" type="text" placeholder="Planner name"></label>
-        <label>Created On<input id="missionDate" type="date"></label>
+  <div id="app-root" style="display: none;">
+    <header class="top-nav">
+      <div class="branding">
+        <div class="title">Ceradon Mission Architect</div>
+        <div class="subtitle">Mission-level planner for Ceradon Architect Stack</div>
       </div>
-      <div class="button-row">
-        <button id="newMissionBtn" class="secondary-btn">New Mission</button>
-        <button id="saveMissionBtn" class="primary-btn">Save Mission</button>
-        <div class="dropdown">
-          <button id="loadMissionBtn" class="secondary-btn">Load Mission…</button>
-          <div id="savedMissionsList" class="dropdown-content"></div>
-        </div>
-        <button id="deleteMissionBtn" class="danger-btn">Delete Mission</button>
-      </div>
+      <nav class="nav-tabs">
+        <button class="nav-btn" data-target="setup">Mission Setup</button>
+        <button class="nav-btn" data-target="phases">Phases</button>
+        <button class="nav-btn" data-target="assets">Assets &amp; Assignment</button>
+        <button class="nav-btn" data-target="constraints">Constraints</button>
+        <button class="nav-btn" data-target="brief">Mission Brief / Export</button>
+      </nav>
+      <button id="loadExampleBtn" class="accent-btn">Load Example Mission</button>
+    </header>
 
-      <details class="integrations">
-        <summary>Integrations (stubs for future data ingest)</summary>
+    <main>
+      <section id="setup" class="panel active">
+        <h2>Mission Setup</h2>
         <div class="grid two-col">
-          <div>
-            <label>Paste Node Architect JSON<textarea id="nodeJson"></textarea></label>
-            <button data-parse="node" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-          </div>
-          <div>
-            <label>Paste UxS Architect JSON<textarea id="uxsJson"></textarea></label>
-            <button data-parse="uxs" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-          </div>
-          <div>
-            <label>Paste Mesh Architect JSON<textarea id="meshJson"></textarea></label>
-            <button data-parse="mesh" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-          </div>
-          <div>
-            <label>Paste KitSmith JSON<textarea id="kitJson"></textarea></label>
-            <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-          </div>
+          <label>Mission Name<input id="missionName" type="text" placeholder="Mission name"></label>
+          <label>Mission Type
+            <select id="missionType">
+              <option>Recon</option>
+              <option>Mesh Lane</option>
+              <option>Resupply</option>
+              <option>UxS Test</option>
+              <option>Custom</option>
+            </select>
+          </label>
+          <label>AO / Location<input id="missionAo" type="text" placeholder="Area of operations"></label>
+          <label>Unit / Detachment<input id="missionUnit" type="text" placeholder="Unit or detachment"></label>
+          <label>Classification Banner<input id="missionBanner" type="text" value="UNCLASSIFIED // TRAINING USE"></label>
+          <label>Date / Time Window<input id="missionTime" type="text" placeholder="H+0 to H+72"></label>
+          <label>Created By<input id="missionCreator" type="text" placeholder="Planner name"></label>
+          <label>Created On<input id="missionDate" type="date"></label>
         </div>
-      </details>
-    </section>
-
-    <section id="phases" class="panel">
-      <div class="panel-header">
-        <h2>Phases</h2>
-        <button id="addPhaseBtn" class="primary-btn">Add Phase</button>
-      </div>
-      <div id="phasesContainer" class="phase-list"></div>
-    </section>
-
-    <section id="assets" class="panel">
-      <div class="panel-header">
-        <h2>Assets &amp; Assignment</h2>
-        <div>
-          <button id="addAssetBtn" class="primary-btn">Add Asset</button>
-          <button id="seedAssetsBtn" class="secondary-btn">Load Demo Assets</button>
-        </div>
-      </div>
-      <div class="asset-table" id="assetTable"></div>
-      <h3>Assignment Matrix</h3>
-      <div id="assignmentMatrix" class="matrix"></div>
-    </section>
-
-    <section id="constraints" class="panel">
-      <h2>Constraints</h2>
-      <div class="grid two-col">
-        <label>Time Window<input id="constraintTime" type="text"></label>
-        <label>Environment<input id="constraintEnvironment" type="text"></label>
-        <label>RF / EW Constraints<textarea id="constraintRf"></textarea></label>
-        <label>Logistics Constraints<textarea id="constraintLogistics"></textarea></label>
-      </div>
-      <label>Success Criteria<div id="successCriteriaList" class="editable-list"></div></label>
-      <label>Risk Notes<textarea id="constraintRisk"></textarea></label>
-    </section>
-
-    <section id="brief" class="panel">
-      <div class="panel-header">
-        <h2>Mission Brief / Export</h2>
         <div class="button-row">
-          <button id="printBtn" class="secondary-btn">Print / Save as PDF</button>
-          <button id="downloadJsonBtn" class="primary-btn">Download Mission JSON</button>
-          <button id="copyJsonBtn" class="secondary-btn">Copy Mission JSON</button>
+          <button id="newMissionBtn" class="secondary-btn">New Mission</button>
+          <button id="saveMissionBtn" class="primary-btn">Save Mission</button>
+          <div class="dropdown">
+            <button id="loadMissionBtn" class="secondary-btn">Load Mission…</button>
+            <div id="savedMissionsList" class="dropdown-content"></div>
+          </div>
+          <button id="deleteMissionBtn" class="danger-btn">Delete Mission</button>
         </div>
-      </div>
-      <article id="missionBrief" class="brief"></article>
-      <div class="export-block">
+
+        <details class="integrations">
+          <summary>Integrations (stubs for future data ingest)</summary>
+          <div class="grid two-col">
+            <div>
+              <label>Paste Node Architect JSON<textarea id="nodeJson"></textarea></label>
+              <button data-parse="node" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+            </div>
+            <div>
+              <label>Paste UxS Architect JSON<textarea id="uxsJson"></textarea></label>
+              <button data-parse="uxs" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+            </div>
+            <div>
+              <label>Paste Mesh Architect JSON<textarea id="meshJson"></textarea></label>
+              <button data-parse="mesh" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+            </div>
+            <div>
+              <label>Paste KitSmith JSON<textarea id="kitJson"></textarea></label>
+              <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section id="phases" class="panel">
         <div class="panel-header">
-          <h3>ATAK JSON Stub</h3>
-          <button id="copyAtakBtn" class="secondary-btn">Copy Stub</button>
+          <h2>Phases</h2>
+          <button id="addPhaseBtn" class="primary-btn">Add Phase</button>
         </div>
-        <textarea id="atakStub" readonly></textarea>
-      </div>
-    </section>
-  </main>
+        <div id="phasesContainer" class="phase-list"></div>
+      </section>
+
+      <section id="assets" class="panel">
+        <div class="panel-header">
+          <h2>Assets &amp; Assignment</h2>
+          <div>
+            <button id="addAssetBtn" class="primary-btn">Add Asset</button>
+            <button id="seedAssetsBtn" class="secondary-btn">Load Demo Assets</button>
+          </div>
+        </div>
+        <div class="asset-table" id="assetTable"></div>
+        <h3>Assignment Matrix</h3>
+        <div id="assignmentMatrix" class="matrix"></div>
+      </section>
+
+      <section id="constraints" class="panel">
+        <h2>Constraints</h2>
+        <div class="grid two-col">
+          <label>Time Window<input id="constraintTime" type="text"></label>
+          <label>Environment<input id="constraintEnvironment" type="text"></label>
+          <label>RF / EW Constraints<textarea id="constraintRf"></textarea></label>
+          <label>Logistics Constraints<textarea id="constraintLogistics"></textarea></label>
+        </div>
+        <label>Success Criteria<div id="successCriteriaList" class="editable-list"></div></label>
+        <label>Risk Notes<textarea id="constraintRisk"></textarea></label>
+      </section>
+
+      <section id="brief" class="panel">
+        <div class="panel-header">
+          <h2>Mission Brief / Export</h2>
+          <div class="button-row">
+            <button id="printBtn" class="secondary-btn">Print / Save as PDF</button>
+            <button id="downloadJsonBtn" class="primary-btn">Download Mission JSON</button>
+            <button id="copyJsonBtn" class="secondary-btn">Copy Mission JSON</button>
+          </div>
+        </div>
+        <article id="missionBrief" class="brief"></article>
+        <div class="export-block">
+          <div class="panel-header">
+            <h3>ATAK JSON Stub</h3>
+            <button id="copyAtakBtn" class="secondary-btn">Copy Stub</button>
+          </div>
+          <textarea id="atakStub" readonly></textarea>
+        </div>
+      </section>
+    </main>
+  </div>
 
   <script src="app.js"></script>
+  <script>
+    const ACCESS_CODE = "MISSION-ORB-593";
+    const STORAGE_KEY = "ceradonDemoAuthorized";
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const gate = document.getElementById("access-gate");
+      const app = document.getElementById("app-root");
+      const input = document.getElementById("demo-code");
+      const button = document.getElementById("demo-enter");
+      const errorEl = document.getElementById("demo-error");
+
+      if (!gate || !app || !input || !button || !errorEl) return;
+
+      const unlock = () => {
+        gate.style.display = "none";
+        app.style.display = "block";
+      };
+
+      if (localStorage.getItem(STORAGE_KEY) === "true") {
+        unlock();
+        return;
+      }
+
+      gate.style.display = "flex";
+      app.style.display = "none";
+
+      const checkCode = () => {
+        const value = input.value.trim();
+        if (value === ACCESS_CODE) {
+          localStorage.setItem(STORAGE_KEY, "true");
+          unlock();
+        } else {
+          errorEl.style.display = "block";
+        }
+      };
+
+      button.addEventListener("click", checkCode);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          checkCode();
+        }
+      });
+    });
+  </script>
 </body>
 </html>
