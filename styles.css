@@ -231,6 +231,22 @@ textarea { min-height: 90px; resize: vertical; }
 .feasibility .flag { padding: 6px 8px; background: #13262f; border-radius: 8px; }
 .feasibility .flag.danger { background: #2c1a1d; color: #f5a3a3; }
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.mission-summary {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #0f1c24;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: center;
+}
+.mission-summary .title {
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.mission-summary .meta { color: var(--muted); }
+.mission-summary .counts { text-align: right; color: var(--muted); }
 .center { text-align: center; }
 
 .brief { background: #0f1c24; border-radius: 10px; padding: 16px; border: 1px solid var(--border); line-height: 1.5; }
@@ -249,9 +265,32 @@ textarea { min-height: 90px; resize: vertical; }
 
 @media print {
   body { background: #fff; color: #000; }
-  .top-nav, .nav-tabs, button, .button-row, details, .parse-btn, .dropdown, .export-block textarea, .panel-header button { display: none !important; }
-  .panel { display: block; border: none; box-shadow: none; }
+  .top-nav,
+  .nav-tabs,
+  button,
+  .button-row,
+  details,
+  .parse-btn,
+  .dropdown,
+  .export-block textarea,
+  .panel-header button,
+  .feasibility,
+  #brief,
+  #setup,
+  #phases,
+  #assets,
+  #constraints { display: none !important; }
+  .panel { display: block; border: none; box-shadow: none; background: #fff; }
+  .mission-summary { border: none; background: #fff; padding: 0 0 12px; }
   .brief { border: none; background: #fff; color: #000; }
-  .mission-card { page-break-inside: avoid; border: 1px solid #ccc; background: #fff; color: #000; }
+  .mission-card {
+    page-break-inside: avoid;
+    border: 1px solid #000;
+    background: #fff;
+    color: #000;
+    break-inside: avoid;
+    padding: 16px;
+  }
+  .cards { grid-template-columns: 1fr; gap: 16px; }
   textarea, input, select { border: none; }
 }

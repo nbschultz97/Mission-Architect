@@ -1,7 +1,6 @@
 // Ceradon Mission Architect - vanilla JS SPA
 (function () {
-  const storageKey = 'ceradonMissionArchitectMissions';
-  let missions = [];
+  let project = null;
   let currentMission = null;
 
   const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
@@ -16,43 +15,46 @@
 
   /** Utility **/
   const uuid = () => 'id-' + Math.random().toString(36).substring(2, 9);
-  const saveToStorage = () => localStorage.setItem(storageKey, JSON.stringify(missions));
-  const loadFromStorage = () => JSON.parse(localStorage.getItem(storageKey) || '[]');
-  const findMissionIndex = (id) => missions.findIndex((m) => m.id === id);
+  const findMissionIndex = (id) => (project.meta.savedMissions || []).findIndex((m) => m.id === id);
+
+  function ensureProject() {
+    if (!project) project = loadMissionProject();
+    if (!project.meta) project.meta = {};
+    if (!project.meta.savedMissions) project.meta.savedMissions = [];
+    if (!project.mission) project.mission = createEmptyMissionProject().mission;
+    currentMission = hydrateMission(project.mission);
+  }
+
+  function syncMetaFromMission() {
+    if (!project.meta) project.meta = {};
+    const meta = currentMission.missionMeta || {};
+    project.meta = {
+      ...project.meta,
+      name: meta.name || currentMission.name || '',
+      durationHours: meta.durationHours || 0,
+      altitudeBand: meta.altitudeBand || 'Surface',
+      temperatureBand: meta.temperatureBand || 'Temperate',
+      savedMissions: project.meta.savedMissions || [],
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  function persistProject() {
+    syncMetaFromMission();
+    project.mission = currentMission;
+    saveMissionProject(project);
+  }
 
   function createNewMission() {
-    currentMission = {
+    const empty = createEmptyMissionProject();
+    currentMission = hydrateMission({
+      ...empty.mission,
       id: uuid(),
-      missionMeta: {
-        name: '',
-        classificationBanner: 'UNCLASSIFIED // TRAINING USE',
-        ao: '',
-        unitOrDetachment: '',
-        createdOn: new Date().toISOString().split('T')[0],
-        createdBy: '',
-        missionType: 'Recon',
-        durationHours: 0,
-        altitudeBand: 'Surface',
-        temperatureBand: 'Temperate'
-      },
-      phases: JSON.parse(JSON.stringify(defaultPhases)),
-      assets: [],
-      assignments: [],
-      imports: {
-        nodes: [],
-        platforms: [],
-        mesh: null
-      },
-      constraints: {
-        timeWindow: '',
-        environment: '',
-        rfConstraints: '',
-        logisticsConstraints: '',
-        successCriteria: [],
-        riskNotes: ''
-      }
-    };
+      phases: JSON.parse(JSON.stringify(defaultPhases))
+    });
+    project.mission = currentMission;
     renderAll();
+    persistProject();
   }
 
   function createExampleMission() {
@@ -133,7 +135,9 @@
     currentMission.phases.forEach((p, idx) => {
       p.assetsUsed = idx === 1 ? assets.filter((_, i) => i < 3) : assets.filter((_, i) => i % 2 === 0);
     });
+    project.mission = currentMission;
     renderAll();
+    persistProject();
   }
 
   function getDemoAssets() {
@@ -214,6 +218,7 @@
     document.querySelectorAll('.nav-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.target === id);
     });
+    window.location.hash = id;
   }
 
   function renderSetup() {
@@ -478,32 +483,84 @@
   function renderMissionCards() {
     const container = document.getElementById('missionCards');
     if (!container) return;
-    if (!currentMission.assignments.length) {
+    const phasesById = Object.fromEntries(currentMission.phases.map((p) => [p.id, p]));
+    const grouped = {};
+    currentMission.assignments.forEach((a) => {
+      const asset = currentMission.assets.find((x) => x.id === a.assetId);
+      if (!asset) return;
+      const team = asset.ownerElement || a.team || 'Unassigned Team';
+      if (!grouped[team]) grouped[team] = [];
+      grouped[team].push({ assignment: a, asset, phase: phasesById[a.phaseId] });
+    });
+
+    if (!Object.keys(grouped).length) {
       container.innerHTML = '<p class="muted">Add role assignments to generate mission cards.</p>';
+      renderMissionSummaryBanner(0);
       return;
     }
-    const phasesById = Object.fromEntries(currentMission.phases.map((p) => [p.id, p]));
-    const cards = currentMission.assignments
-      .map((a) => {
-        const asset = currentMission.assets.find((x) => x.id === a.assetId) || {};
-        const phase = phasesById[a.phaseId] || {};
+
+    const cards = Object.entries(grouped)
+      .map(([team, items]) => {
+        const phaseNames = Array.from(new Set(items.map((i) => i.phase?.name).filter(Boolean))).join(', ') || '—';
+        const taskSummary = Array.from(
+          new Set(
+            items
+              .map((i) => (i.phase?.tasks || []).slice(0, 3))
+              .flat()
+              .filter(Boolean)
+          )
+        )
+          .slice(0, 5)
+          .join(', ');
+        const sustainmentNotes = items
+          .filter((i) => i.asset.type === 'KIT' || /kit/i.test(i.asset.type || ''))
+          .map((i) => i.asset.notes || 'Sustainment kit')
+          .join('; ');
+        const commsNote = items.some((i) => i.assignment.requiresComms) ? 'Requires mesh/relay redundancy' : '';
+        const assetLines = items
+          .map((i) => {
+            const roles = [i.assignment.role, ...(i.asset.roleTags || [])].filter(Boolean).join(', ');
+            return `<li><strong>${i.asset.name}</strong> — ${roles || 'Role TBD'}${
+              i.assignment.notes ? ` (${i.assignment.notes})` : ''
+            }</li>`;
+          })
+          .join('');
         return `
           <div class="mission-card">
             <div class="card-header">
-              <div class="card-title">${asset.name || 'Asset'}</div>
-              ${a.critical || asset.critical ? '<span class="pill danger">Critical</span>' : ''}
+              <div>
+                <div class="card-title">${team}</div>
+                <div class="meta">Phases: ${phaseNames}</div>
+              </div>
+              ${items.some((i) => i.assignment.critical || i.asset.critical) ? '<span class="pill danger">Critical</span>' : ''}
             </div>
             <div class="card-body">
-              <p><strong>Role:</strong> ${a.role || '—'}</p>
-              <p><strong>Phase:</strong> ${phase.name || '—'}</p>
-              <p><strong>Notes:</strong> ${a.notes || asset.notes || '—'}</p>
-              <p><strong>Kit:</strong> ${asset.sourceTool || 'Unknown'}</p>
-              ${a.requiresComms ? '<p class="warning">Requires comms redundancy</p>' : ''}
+              <p><strong>Tasks:</strong> ${taskSummary || 'Align tasks per phase'}</p>
+              <p><strong>Platforms / Nodes:</strong></p>
+              <ul>${assetLines}</ul>
+              ${sustainmentNotes ? `<p><strong>Sustainment:</strong> ${sustainmentNotes}</p>` : ''}
+              ${commsNote ? `<p class="warning"><strong>Comms:</strong> ${commsNote}</p>` : ''}
             </div>
           </div>`;
       })
       .join('');
     container.innerHTML = cards;
+    renderMissionSummaryBanner(Object.keys(grouped).length);
+  }
+
+  function renderMissionSummaryBanner(teamCount = 0) {
+    const banner = document.getElementById('missionSummaryBanner');
+    if (!banner) return;
+    const meta = currentMission.missionMeta || {};
+    const name = meta.name || currentMission.name || 'Untitled Mission';
+    const duration = meta.durationHours ? `${meta.durationHours} hrs` : 'Not set';
+    const env = [meta.altitudeBand, meta.temperatureBand].filter(Boolean).join(' / ') || 'n/a';
+    banner.innerHTML = `
+      <div class="title">${name}</div>
+      <div class="meta">Duration: ${duration}</div>
+      <div class="meta">Environment: ${env}</div>
+      <div class="counts">Mission cards: ${teamCount}</div>
+    `;
   }
 
   function renderFeasibility() {
@@ -556,6 +613,8 @@
     document.getElementById('importMeshBtn').addEventListener('click', () => triggerImport('mesh'));
     document.getElementById('exportOverlayBtn').addEventListener('click', downloadMissionOverlay);
     document.getElementById('printBtn').addEventListener('click', () => window.print());
+    const printCardsBtn = document.getElementById('printCardsBtn');
+    if (printCardsBtn) printCardsBtn.addEventListener('click', () => window.print());
     document.getElementById('downloadJsonBtn').addEventListener('click', downloadMissionJson);
 
     document.getElementById('missionName').addEventListener('input', (e) => updateMetaField('name', e.target.value));
@@ -596,6 +655,7 @@
       renderPhases();
       renderBrief();
       renderAssignmentMatrix();
+      persistProject();
     }
   }
 
@@ -614,6 +674,7 @@
     }
     renderBrief();
     renderAssignmentMatrix();
+    persistProject();
   }
 
   function onPhaseMove(e) {
@@ -625,6 +686,7 @@
     currentMission.phases.splice(newIdx, 0, moved);
     renderPhases();
     renderAssignmentMatrix();
+    persistProject();
   }
 
   function onPhaseDelete(e) {
@@ -633,6 +695,7 @@
     renderPhases();
     renderAssignmentMatrix();
     renderBrief();
+    persistProject();
   }
 
   function addPhase() {
@@ -645,6 +708,7 @@
     });
     renderPhases();
     renderAssignmentMatrix();
+    persistProject();
   }
 
   function addAssetPrompt() {
@@ -663,6 +727,7 @@
     renderPhases();
     renderAssignmentMatrix();
     renderBrief();
+    persistProject();
   }
 
   function seedAssets() {
@@ -671,6 +736,7 @@
     renderPhases();
     renderAssignmentMatrix();
     renderBrief();
+    persistProject();
   }
 
   function removeAsset(id) {
@@ -680,6 +746,7 @@
     renderPhases();
     renderAssignmentMatrix();
     renderBrief();
+    persistProject();
   }
 
   function duplicateAsset(id) {
@@ -690,6 +757,7 @@
     renderAssets();
     renderAssignmentMatrix();
     renderPhases();
+    persistProject();
   }
 
   function editAsset(id) {
@@ -710,6 +778,7 @@
     renderAssignmentMatrix();
     renderPhases();
     renderBrief();
+    persistProject();
   }
 
   function addAssignment() {
@@ -728,6 +797,7 @@
     });
     renderAssignments();
     renderMissionCards();
+    persistProject();
   }
 
   function onAssignmentFieldChange(e) {
@@ -739,6 +809,7 @@
     else assignment[field] = e.target.value;
     renderMissionCards();
     renderFeasibility();
+    persistProject();
   }
 
   function onAssignmentRemove(e) {
@@ -746,6 +817,7 @@
     currentMission.assignments = currentMission.assignments.filter((a) => a.id !== id);
     renderAssignments();
     renderMissionCards();
+    persistProject();
   }
 
   function onAssignmentChange(e) {
@@ -761,18 +833,21 @@
     }
     renderPhases();
     renderBrief();
+    persistProject();
   }
 
   function onCriterionChange(e) {
     const idx = Number(e.target.dataset.criterion);
     currentMission.constraints.successCriteria[idx] = e.target.value;
     renderBrief();
+    persistProject();
   }
   function onCriterionRemove(e) {
     const idx = Number(e.target.dataset.removeCriterion);
     currentMission.constraints.successCriteria.splice(idx, 1);
     renderConstraints();
     renderBrief();
+    persistProject();
   }
   function onCriterionAdd() {
     const value = document.getElementById('newCriterion').value.trim();
@@ -780,11 +855,13 @@
     currentMission.constraints.successCriteria.push(value);
     renderConstraints();
     renderBrief();
+    persistProject();
   }
 
   function updateMissionField(field, value) {
     currentMission[field] = value;
     renderBrief();
+    persistProject();
   }
 
   function updateMetaField(field, value) {
@@ -795,10 +872,12 @@
     }
     renderBrief();
     renderFeasibility();
+    persistProject();
   }
   function updateConstraint(field, value) {
     currentMission.constraints[field] = value;
     renderBrief();
+    persistProject();
   }
 
   function onParseClick(e) {
@@ -819,6 +898,7 @@
       renderPhases();
       renderAssignmentMatrix();
       renderBrief();
+      persistProject();
       alert(`Added ${parsed.length} assets`);
     } catch (err) {
       alert('Invalid JSON');
@@ -861,6 +941,7 @@
     renderAssets();
     renderAssignmentMatrix();
     renderBrief();
+    persistProject();
     alert(`Imported ${parsed.length} node designs`);
   }
 
@@ -878,29 +959,32 @@
     renderAssignmentMatrix();
     renderFeasibility();
     renderBrief();
+    persistProject();
     alert(`Imported ${parsed.length} platform designs`);
   }
 
   function addImportedMesh(data) {
     currentMission.imports.mesh = data;
     renderFeasibility();
+    persistProject();
     alert('Mesh data imported');
   }
 
   /** Storage **/
   function saveCurrentMission() {
+    const snapshot = JSON.parse(JSON.stringify(currentMission));
     const idx = findMissionIndex(currentMission.id);
-    if (idx >= 0) missions[idx] = currentMission;
-    else missions.push(currentMission);
-    saveToStorage();
+    if (idx >= 0) project.meta.savedMissions[idx] = snapshot;
+    else project.meta.savedMissions.push(snapshot);
+    persistProject();
     renderSavedMissions();
     alert('Mission saved locally');
   }
 
   function deleteCurrentMission() {
     if (!confirm('Delete this mission from local storage?')) return;
-    missions = missions.filter((m) => m.id !== currentMission.id);
-    saveToStorage();
+    project.meta.savedMissions = (project.meta.savedMissions || []).filter((m) => m.id !== currentMission.id);
+    persistProject();
     createNewMission();
     renderSavedMissions();
   }
@@ -908,9 +992,11 @@
   function renderSavedMissions() {
     const list = document.getElementById('savedMissionsList');
     list.innerHTML = '';
-    missions.forEach((m) => {
+    (project.meta.savedMissions || []).forEach((m) => {
       const btn = document.createElement('button');
-      btn.textContent = `${m.name || 'Untitled'} (${m.createdOn})`;
+      const title = m.missionMeta?.name || m.name || 'Untitled';
+      const created = m.missionMeta?.createdOn || m.createdOn || '—';
+      btn.textContent = `${title} (${created})`;
       btn.addEventListener('click', () => loadMissionById(m.id));
       list.appendChild(btn);
     });
@@ -922,10 +1008,12 @@
   }
 
   function loadMissionById(id) {
-    const m = missions.find((x) => x.id === id);
+    const m = (project.meta.savedMissions || []).find((x) => x.id === id);
     if (!m) return;
-    currentMission = JSON.parse(JSON.stringify(m));
+    currentMission = hydrateMission(JSON.parse(JSON.stringify(m)));
+    project.mission = currentMission;
     renderAll();
+    persistProject();
     toggleSavedList();
   }
 
@@ -1068,11 +1156,12 @@
 
   /** Init **/
   function init() {
-    missions = loadFromStorage();
-    currentMission = missions[missions.length - 1] ? hydrateMission(JSON.parse(JSON.stringify(missions[missions.length - 1]))) : null;
+    ensureProject();
     if (!currentMission) createNewMission();
     renderAll();
     bindEvents();
+    const hash = window.location.hash.replace('#', '');
+    if (hash) switchPanel(hash);
   }
 
   function hydrateMission(m) {
@@ -1088,6 +1177,18 @@
         durationHours: 0,
         altitudeBand: 'Surface',
         temperatureBand: 'Temperate'
+      };
+    }
+    if (!m.id) m.id = uuid();
+    if (!m.phases || !m.phases.length) m.phases = JSON.parse(JSON.stringify(defaultPhases));
+    if (!m.constraints) {
+      m.constraints = {
+        timeWindow: '',
+        environment: '',
+        rfConstraints: '',
+        logisticsConstraints: '',
+        successCriteria: [],
+        riskNotes: ''
       };
     }
     if (!m.assignments) m.assignments = [];

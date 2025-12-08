@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ceradon Mission Architect</title>
+  <script src="mission_project.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -56,6 +57,7 @@
         <button class="nav-btn" data-target="assets">Assets &amp; Assignment</button>
         <button class="nav-btn" data-target="constraints">Constraints</button>
         <button class="nav-btn" data-target="brief">Mission Brief / Export</button>
+        <button class="nav-btn" data-target="mission-cards">Mission Cards</button>
       </nav>
       <button id="loadExampleBtn" class="accent-btn">Load Example Mission</button>
     </header>
@@ -185,7 +187,6 @@
         </div>
         <article id="missionBrief" class="brief"></article>
         <section class="feasibility" id="feasibilityPanel"></section>
-        <section class="cards" id="missionCards"></section>
         <div class="export-block">
           <div class="panel-header">
             <h3>ATAK JSON Stub</h3>
@@ -193,6 +194,20 @@
           </div>
           <textarea id="atakStub" readonly></textarea>
         </div>
+      </section>
+
+      <section id="mission-cards" class="panel">
+        <div class="panel-header">
+          <div>
+            <h2>Mission Cards</h2>
+            <p class="muted">Operator-facing cards driven by the shared MissionProject.</p>
+          </div>
+          <div class="button-row">
+            <button id="printCardsBtn" class="secondary-btn">Print Mission Cards</button>
+          </div>
+        </div>
+        <div id="missionSummaryBanner" class="mission-summary"></div>
+        <section class="cards" id="missionCards"></section>
       </section>
     </main>
   </div>
