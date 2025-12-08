@@ -4,6 +4,9 @@
   let missions = [];
   let currentMission = null;
 
+  const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
+  const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
+
   const defaultPhases = [
     { id: 'ORP', name: 'ORP', description: 'Objective Rally Point setup', tasks: [], assetsUsed: [] },
     { id: 'INFIL', name: 'Infil', description: 'Movement to objective', tasks: [], assetsUsed: [] },
@@ -20,15 +23,26 @@
   function createNewMission() {
     currentMission = {
       id: uuid(),
-      name: '',
-      classificationBanner: 'UNCLASSIFIED // TRAINING USE',
-      ao: '',
-      unitOrDetachment: '',
-      createdOn: new Date().toISOString().split('T')[0],
-      createdBy: '',
-      missionType: 'Recon',
+      missionMeta: {
+        name: '',
+        classificationBanner: 'UNCLASSIFIED // TRAINING USE',
+        ao: '',
+        unitOrDetachment: '',
+        createdOn: new Date().toISOString().split('T')[0],
+        createdBy: '',
+        missionType: 'Recon',
+        durationHours: 0,
+        altitudeBand: 'Surface',
+        temperatureBand: 'Temperate'
+      },
       phases: JSON.parse(JSON.stringify(defaultPhases)),
       assets: [],
+      assignments: [],
+      imports: {
+        nodes: [],
+        platforms: [],
+        mesh: null
+      },
       constraints: {
         timeWindow: '',
         environment: '',
@@ -44,13 +58,18 @@
   function createExampleMission() {
     currentMission = {
       id: uuid(),
-      name: 'Fjord Recon Lane',
-      classificationBanner: 'UNCLASSIFIED // TRAINING USE',
-      ao: 'Nordic fjord complex, austere cold-weather',
-      unitOrDetachment: 'Bravo Troop / Team Vantage',
-      createdOn: new Date().toISOString().split('T')[0],
-      createdBy: 'Planner X',
-      missionType: 'Recon',
+      missionMeta: {
+        name: 'Fjord Recon Lane',
+        classificationBanner: 'UNCLASSIFIED // TRAINING USE',
+        ao: 'Nordic fjord complex, austere cold-weather',
+        unitOrDetachment: 'Bravo Troop / Team Vantage',
+        createdOn: new Date().toISOString().split('T')[0],
+        createdBy: 'Planner X',
+        missionType: 'Recon',
+        durationHours: 48,
+        altitudeBand: 'Low',
+        temperatureBand: 'Cold'
+      },
       phases: [
         {
           id: 'ORP',
@@ -94,6 +113,12 @@
         }
       ],
       assets: getDemoAssets(),
+      assignments: [],
+      imports: {
+        nodes: [],
+        platforms: [],
+        mesh: null
+      },
       constraints: {
         timeWindow: 'H+0 to H+48',
         environment: 'Cold-weather fjord, mixed rocky ridgeline',
@@ -168,6 +193,7 @@
     renderSetup();
     renderPhases();
     renderAssets();
+    renderAssignments();
     renderConstraints();
     renderBrief();
     renderSavedMissions();
@@ -191,14 +217,22 @@
   }
 
   function renderSetup() {
-    document.getElementById('missionName').value = currentMission.name;
-    document.getElementById('missionType').value = currentMission.missionType;
-    document.getElementById('missionAo').value = currentMission.ao;
-    document.getElementById('missionUnit').value = currentMission.unitOrDetachment;
-    document.getElementById('missionBanner').value = currentMission.classificationBanner;
+    const meta = currentMission.missionMeta || {};
+    const altitudeSelect = document.getElementById('missionAltitude');
+    const temperatureSelect = document.getElementById('missionTemperature');
+    altitudeSelect.innerHTML = altitudeBands.map((band) => `<option value="${band}">${band}</option>`).join('');
+    temperatureSelect.innerHTML = temperatureBands.map((band) => `<option value="${band}">${band}</option>`).join('');
+    document.getElementById('missionName').value = meta.name || currentMission.name || '';
+    document.getElementById('missionType').value = meta.missionType || currentMission.missionType || 'Recon';
+    document.getElementById('missionAo').value = meta.ao || currentMission.ao || '';
+    document.getElementById('missionUnit').value = meta.unitOrDetachment || currentMission.unitOrDetachment || '';
+    document.getElementById('missionBanner').value = meta.classificationBanner || currentMission.classificationBanner || '';
     document.getElementById('missionTime').value = currentMission.constraints.timeWindow || '';
-    document.getElementById('missionCreator').value = currentMission.createdBy;
-    document.getElementById('missionDate').value = currentMission.createdOn;
+    document.getElementById('missionCreator').value = meta.createdBy || currentMission.createdBy || '';
+    document.getElementById('missionDate').value = meta.createdOn || currentMission.createdOn || '';
+    document.getElementById('missionDuration').value = meta.durationHours || 0;
+    document.getElementById('missionAltitude').value = meta.altitudeBand || 'Surface';
+    document.getElementById('missionTemperature').value = meta.temperatureBand || 'Temperate';
   }
 
   function renderPhases() {
@@ -264,6 +298,7 @@
           <td>${(a.roleTags || []).join(', ')}</td>
           <td>${a.ownerElement || ''}</td>
           <td>${a.sourceTool || ''}</td>
+          <td>${a.critical ? 'Critical' : ''}</td>
           <td>${a.notes || ''}</td>
           <td class="asset-actions">
             <button class="secondary-btn" data-edit="${a.id}">Edit</button>
@@ -273,10 +308,55 @@
         </tr>`
       )
       .join('');
-    wrapper.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role Tags</th><th>Owner/Element</th><th>Source Tool</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrapper.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role Tags</th><th>Owner/Element</th><th>Source Tool</th><th>Critical</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
     wrapper.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => removeAsset(btn.dataset.remove)));
     wrapper.querySelectorAll('[data-dup]').forEach((btn) => btn.addEventListener('click', () => duplicateAsset(btn.dataset.dup)));
     wrapper.querySelectorAll('[data-edit]').forEach((btn) => btn.addEventListener('click', () => editAsset(btn.dataset.edit)));
+  }
+
+  function renderAssignments() {
+    const container = document.getElementById('roleAssignment');
+    if (!container) return;
+    if (!currentMission.assignments?.length) {
+      container.innerHTML = '<p class="muted">No role assignments yet.</p>';
+    } else {
+      const rows = currentMission.assignments
+        .map((a) => {
+          return `
+            <tr>
+              <td>
+                <select data-assign-field="assetId" data-id="${a.id}">
+                  ${currentMission.assets
+                    .map(
+                      (asset) => `<option value="${asset.id}" ${asset.id === a.assetId ? 'selected' : ''}>${asset.name}</option>`
+                    )
+                    .join('')}
+                </select>
+              </td>
+              <td>
+                <select data-assign-field="phaseId" data-id="${a.id}">
+                  ${currentMission.phases
+                    .map((p) => `<option value="${p.id}" ${p.id === a.phaseId ? 'selected' : ''}>${p.name}</option>`)
+                    .join('')}
+                </select>
+              </td>
+              <td><input data-assign-field="role" data-id="${a.id}" value="${a.role || ''}" placeholder="Role" /></td>
+              <td><input data-assign-field="notes" data-id="${a.id}" value="${a.notes || ''}" placeholder="Employment notes" /></td>
+              <td class="center"><input type="checkbox" data-assign-field="critical" data-id="${a.id}" ${a.critical ? 'checked' : ''}></td>
+              <td class="center"><input type="checkbox" data-assign-field="requiresComms" data-id="${a.id}" ${
+                a.requiresComms ? 'checked' : ''
+              }></td>
+              <td><button class="danger-btn" data-remove-assignment="${a.id}">✕</button></td>
+            </tr>`;
+        })
+        .join('');
+      container.innerHTML = `<table><thead><tr><th>Asset</th><th>Phase</th><th>Role</th><th>Notes</th><th>Critical</th><th>Needs Comms</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    container.querySelectorAll('[data-assign-field]').forEach((el) => {
+      el.addEventListener('input', onAssignmentFieldChange);
+      el.addEventListener('change', onAssignmentFieldChange);
+    });
+    container.querySelectorAll('[data-remove-assignment]').forEach((btn) => btn.addEventListener('click', onAssignmentRemove));
   }
 
   function renderAssignmentMatrix() {
@@ -329,6 +409,7 @@
   function renderBrief() {
     const brief = document.getElementById('missionBrief');
     const m = currentMission;
+    const meta = m.missionMeta || {};
     const assetsById = Object.fromEntries(m.assets.map((a) => [a.id, a]));
     const phaseBlocks = m.phases
       .map((p) => {
@@ -370,10 +451,13 @@
     `;
 
     brief.innerHTML = `
-      <div class="classification">${m.classificationBanner}</div>
-      <h2>${m.name || 'Untitled Mission'}</h2>
-      <p><strong>Unit:</strong> ${m.unitOrDetachment || ''} • <strong>AO:</strong> ${m.ao || ''} • <strong>Time:</strong> ${m.constraints.timeWindow || ''}</p>
-      <p><strong>Mission Type:</strong> ${m.missionType}</p>
+      <div class="classification">${meta.classificationBanner || 'UNCLASSIFIED'}</div>
+      <h2>${meta.name || m.name || 'Untitled Mission'}</h2>
+      <p><strong>Unit:</strong> ${meta.unitOrDetachment || m.unitOrDetachment || ''} • <strong>AO:</strong> ${
+      meta.ao || m.ao || ''
+    } • <strong>Time:</strong> ${m.constraints.timeWindow || ''}</p>
+      <p><strong>Mission Type:</strong> ${meta.missionType || m.missionType || ''}</p>
+      <p><strong>Duration:</strong> ${meta.durationHours || 0} hrs • <strong>Altitude:</strong> ${meta.altitudeBand || 'n/a'} • <strong>Temperature:</strong> ${meta.temperatureBand || 'n/a'}</p>
       <h3>Phased Concept</h3>
       ${phaseBlocks}
       <h3>Assets & Roles</h3>
@@ -386,6 +470,74 @@
     document.getElementById('atakStub').value = JSON.stringify(buildAtakStub(m), null, 2);
     document.getElementById('copyJsonBtn').onclick = () => copyToClipboard(missionJson);
     document.getElementById('copyAtakBtn').onclick = () => copyToClipboard(document.getElementById('atakStub').value);
+
+    renderMissionCards();
+    renderFeasibility();
+  }
+
+  function renderMissionCards() {
+    const container = document.getElementById('missionCards');
+    if (!container) return;
+    if (!currentMission.assignments.length) {
+      container.innerHTML = '<p class="muted">Add role assignments to generate mission cards.</p>';
+      return;
+    }
+    const phasesById = Object.fromEntries(currentMission.phases.map((p) => [p.id, p]));
+    const cards = currentMission.assignments
+      .map((a) => {
+        const asset = currentMission.assets.find((x) => x.id === a.assetId) || {};
+        const phase = phasesById[a.phaseId] || {};
+        return `
+          <div class="mission-card">
+            <div class="card-header">
+              <div class="card-title">${asset.name || 'Asset'}</div>
+              ${a.critical || asset.critical ? '<span class="pill danger">Critical</span>' : ''}
+            </div>
+            <div class="card-body">
+              <p><strong>Role:</strong> ${a.role || '—'}</p>
+              <p><strong>Phase:</strong> ${phase.name || '—'}</p>
+              <p><strong>Notes:</strong> ${a.notes || asset.notes || '—'}</p>
+              <p><strong>Kit:</strong> ${asset.sourceTool || 'Unknown'}</p>
+              ${a.requiresComms ? '<p class="warning">Requires comms redundancy</p>' : ''}
+            </div>
+          </div>`;
+      })
+      .join('');
+    container.innerHTML = cards;
+  }
+
+  function renderFeasibility() {
+    const container = document.getElementById('feasibilityPanel');
+    if (!container) return;
+    const duration = Number(currentMission.missionMeta?.durationHours || 0);
+    const criticalPlatforms = currentMission.assets.filter((a) => (a.type === 'PLATFORM' || a.type === 'UXS') && a.critical).length;
+    const rows = currentMission.assets
+      .filter((a) => a.type === 'PLATFORM' || a.type === 'UXS')
+      .map((asset) => {
+        const enduranceHrs = getAssetEnduranceHours(asset);
+        const sorties = enduranceHrs ? Math.ceil(duration / enduranceHrs) : 'n/a';
+        const warning = enduranceHrs && duration > enduranceHrs * 2 ? '⚠️ sustainment needed' : '';
+        return `<tr><td>${asset.name}</td><td>${enduranceHrs ? `${enduranceHrs}h` : 'Unknown'}</td><td>${duration || 0}h</td><td>${sorties}</td><td>${warning}</td></tr>`;
+      })
+      .join('');
+
+    const commsRisk = evaluateCommsRisk();
+    const sustainmentFlag = currentMission.assets.some((a) => a.sourceTool === 'KitSmith') ? 'Linked' : 'Sustainment not yet validated';
+
+    container.innerHTML = `
+      <div class="feasibility-banner">
+        <div><strong>Duration:</strong> ${duration || 0} hrs</div>
+        <div><strong>Critical platforms:</strong> ${criticalPlatforms}</div>
+        <div class="flag">${sustainmentFlag}</div>
+        <div class="flag ${commsRisk ? 'danger' : ''}">${commsRisk ? 'Comms risk detected' : 'Comms acceptable'}</div>
+      </div>
+      <div class="asset-table">
+        <table>
+          <thead><tr><th>Platform</th><th>Single-sortie endurance</th><th>Mission duration</th><th>Implied sorties</th><th>Notes</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5">No platforms loaded</td></tr>'}</tbody>
+        </table>
+      </div>
+    `;
   }
 
   /** Event handlers **/
@@ -398,17 +550,34 @@
     document.getElementById('addPhaseBtn').addEventListener('click', addPhase);
     document.getElementById('addAssetBtn').addEventListener('click', addAssetPrompt);
     document.getElementById('seedAssetsBtn').addEventListener('click', seedAssets);
+    document.getElementById('addAssignmentBtn').addEventListener('click', addAssignment);
+    document.getElementById('importNodeBtn').addEventListener('click', () => triggerImport('node'));
+    document.getElementById('importPlatformBtn').addEventListener('click', () => triggerImport('platform'));
+    document.getElementById('importMeshBtn').addEventListener('click', () => triggerImport('mesh'));
+    document.getElementById('exportOverlayBtn').addEventListener('click', downloadMissionOverlay);
     document.getElementById('printBtn').addEventListener('click', () => window.print());
     document.getElementById('downloadJsonBtn').addEventListener('click', downloadMissionJson);
 
-    document.getElementById('missionName').addEventListener('input', (e) => updateMissionField('name', e.target.value));
-    document.getElementById('missionType').addEventListener('input', (e) => updateMissionField('missionType', e.target.value));
-    document.getElementById('missionAo').addEventListener('input', (e) => updateMissionField('ao', e.target.value));
-    document.getElementById('missionUnit').addEventListener('input', (e) => updateMissionField('unitOrDetachment', e.target.value));
-    document.getElementById('missionBanner').addEventListener('input', (e) => updateMissionField('classificationBanner', e.target.value));
+    document.getElementById('missionName').addEventListener('input', (e) => updateMetaField('name', e.target.value));
+    document.getElementById('missionType').addEventListener('input', (e) => updateMetaField('missionType', e.target.value));
+    document.getElementById('missionAo').addEventListener('input', (e) => updateMetaField('ao', e.target.value));
+    document.getElementById('missionUnit').addEventListener('input', (e) => updateMetaField('unitOrDetachment', e.target.value));
+    document.getElementById('missionBanner').addEventListener('input', (e) => updateMetaField('classificationBanner', e.target.value));
     document.getElementById('missionTime').addEventListener('input', (e) => updateConstraint('timeWindow', e.target.value));
-    document.getElementById('missionCreator').addEventListener('input', (e) => updateMissionField('createdBy', e.target.value));
-    document.getElementById('missionDate').addEventListener('input', (e) => updateMissionField('createdOn', e.target.value));
+    document.getElementById('missionCreator').addEventListener('input', (e) => updateMetaField('createdBy', e.target.value));
+    document.getElementById('missionDate').addEventListener('input', (e) => updateMetaField('createdOn', e.target.value));
+    document.getElementById('missionDuration').addEventListener('input', (e) => updateMetaField('durationHours', Number(e.target.value)));
+    document.querySelectorAll('[data-duration]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const hours = Number(btn.dataset.duration);
+        document.getElementById('missionDuration').value = hours;
+        updateMetaField('durationHours', hours);
+      })
+    );
+    document.getElementById('missionAltitude').addEventListener('input', (e) => updateMetaField('altitudeBand', e.target.value));
+    document.getElementById('missionTemperature').addEventListener('input', (e) =>
+      updateMetaField('temperatureBand', e.target.value)
+    );
 
     document.getElementById('constraintTime').addEventListener('input', (e) => updateConstraint('timeWindow', e.target.value));
     document.getElementById('constraintEnvironment').addEventListener('input', (e) => updateConstraint('environment', e.target.value));
@@ -489,7 +658,7 @@
       .filter(Boolean);
     const ownerElement = prompt('Owner/Element?', '');
     const notes = prompt('Notes?', '');
-    currentMission.assets.push({ id: uuid(), name, type, sourceTool, roleTags, ownerElement, notes });
+    currentMission.assets.push({ id: uuid(), name, type, sourceTool, roleTags, ownerElement, notes, critical: false });
     renderAssets();
     renderPhases();
     renderAssignmentMatrix();
@@ -535,11 +704,48 @@
       .filter(Boolean);
     const ownerElement = prompt('Owner/Element?', asset.ownerElement || '') || asset.ownerElement;
     const notes = prompt('Notes?', asset.notes || '') || asset.notes;
-    Object.assign(asset, { name, type, sourceTool, roleTags, ownerElement, notes });
+    const critical = confirm('Mark as critical to mission success?');
+    Object.assign(asset, { name, type, sourceTool, roleTags, ownerElement, notes, critical });
     renderAssets();
     renderAssignmentMatrix();
     renderPhases();
     renderBrief();
+  }
+
+  function addAssignment() {
+    if (!currentMission.assets.length || !currentMission.phases.length) {
+      alert('Add assets and phases before assigning roles.');
+      return;
+    }
+    currentMission.assignments.push({
+      id: uuid(),
+      assetId: currentMission.assets[0].id,
+      phaseId: currentMission.phases[0].id,
+      role: '',
+      notes: '',
+      critical: false,
+      requiresComms: false
+    });
+    renderAssignments();
+    renderMissionCards();
+  }
+
+  function onAssignmentFieldChange(e) {
+    const id = e.target.dataset.id;
+    const field = e.target.dataset.assignField;
+    const assignment = currentMission.assignments.find((a) => a.id === id);
+    if (!assignment) return;
+    if (e.target.type === 'checkbox') assignment[field] = e.target.checked;
+    else assignment[field] = e.target.value;
+    renderMissionCards();
+    renderFeasibility();
+  }
+
+  function onAssignmentRemove(e) {
+    const id = e.target.dataset.removeAssignment;
+    currentMission.assignments = currentMission.assignments.filter((a) => a.id !== id);
+    renderAssignments();
+    renderMissionCards();
   }
 
   function onAssignmentChange(e) {
@@ -580,6 +786,16 @@
     currentMission[field] = value;
     renderBrief();
   }
+
+  function updateMetaField(field, value) {
+    if (!currentMission.missionMeta) currentMission.missionMeta = {};
+    currentMission.missionMeta[field] = value;
+    if (['name', 'missionType', 'ao', 'unitOrDetachment', 'classificationBanner', 'createdBy', 'createdOn'].includes(field)) {
+      currentMission[field] = value;
+    }
+    renderBrief();
+    renderFeasibility();
+  }
   function updateConstraint(field, value) {
     currentMission.constraints[field] = value;
     renderBrief();
@@ -607,6 +823,68 @@
     } catch (err) {
       alert('Invalid JSON');
     }
+  }
+
+  function triggerImport(type) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (type === 'node') addImportedNodes(data);
+          if (type === 'platform') addImportedPlatforms(data);
+          if (type === 'mesh') addImportedMesh(data);
+        } catch (err) {
+          alert('Invalid JSON file');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+
+  function addImportedNodes(data) {
+    const parsed = parseNodeArchitectJson(data);
+    currentMission.imports.nodes = parsed;
+    currentMission.assets.push(
+      ...parsed.map((node) => ({
+        ...node,
+        type: 'NODE',
+        critical: Boolean(node.critical)
+      }))
+    );
+    renderAssets();
+    renderAssignmentMatrix();
+    renderBrief();
+    alert(`Imported ${parsed.length} node designs`);
+  }
+
+  function addImportedPlatforms(data) {
+    const parsed = parsePlatformArchitectJson(data);
+    currentMission.imports.platforms = parsed;
+    currentMission.assets.push(
+      ...parsed.map((platform) => ({
+        ...platform,
+        type: 'PLATFORM',
+        critical: Boolean(platform.critical)
+      }))
+    );
+    renderAssets();
+    renderAssignmentMatrix();
+    renderFeasibility();
+    renderBrief();
+    alert(`Imported ${parsed.length} platform designs`);
+  }
+
+  function addImportedMesh(data) {
+    currentMission.imports.mesh = data;
+    renderFeasibility();
+    alert('Mesh data imported');
   }
 
   /** Storage **/
@@ -669,14 +947,17 @@
       ceradonMissionVersion: '1.0',
       missionMeta: {
         id: m.id,
-        name: m.name,
-        classificationBanner: m.classificationBanner,
-        ao: m.ao,
-        unit: m.unitOrDetachment,
+        name: m.missionMeta?.name || m.name,
+        classificationBanner: m.missionMeta?.classificationBanner || m.classificationBanner,
+        ao: m.missionMeta?.ao || m.ao,
+        unit: m.missionMeta?.unitOrDetachment || m.unitOrDetachment,
         time: m.constraints.timeWindow,
-        createdBy: m.createdBy,
-        createdOn: m.createdOn,
-        missionType: m.missionType
+        createdBy: m.missionMeta?.createdBy || m.createdBy,
+        createdOn: m.missionMeta?.createdOn || m.createdOn,
+        missionType: m.missionMeta?.missionType || m.missionType,
+        durationHours: m.missionMeta?.durationHours,
+        altitudeBand: m.missionMeta?.altitudeBand,
+        temperatureBand: m.missionMeta?.temperatureBand
       },
       phases: m.phases.map((p) => ({
         id: p.id,
@@ -697,10 +978,7 @@
         ownerElement: a.ownerElement,
         notes: a.notes
       })),
-      assignments: m.phases.reduce((acc, p) => {
-        acc[p.id] = p.assetsUsed || [];
-        return acc;
-      }, {})
+      assignments: m.assignments || []
     };
   }
 
@@ -710,6 +988,9 @@
   }
   function parseUxSArchitectJson(data) {
     return normalizeIncomingAssets(data, 'UxSArchitect', 'UXS');
+  }
+  function parsePlatformArchitectJson(data) {
+    return normalizeIncomingAssets(data, 'PlatformArchitect', 'PLATFORM');
   }
   function parseMeshArchitectJson(data) {
     return normalizeIncomingAssets(data, 'MeshArchitect', 'MESH_ELEMENT');
@@ -728,17 +1009,90 @@
       sourceId: item.id,
       roleTags: item.roleTags || [],
       ownerElement: item.owner || '',
-      notes: item.notes || ''
+      notes: item.notes || '',
+      enduranceHours: item.enduranceHours || item.endurance || null,
+      enduranceMinutes: item.enduranceMinutes || null,
+      lat: item.lat || item.latitude,
+      lon: item.lon || item.lng || item.longitude,
+      critical: Boolean(item.critical)
     }));
+  }
+
+  function getAssetEnduranceHours(asset) {
+    if (asset.enduranceHours) return Number(asset.enduranceHours);
+    if (asset.enduranceMinutes) return Number(asset.enduranceMinutes) / 60;
+    return null;
+  }
+
+  function downloadMissionOverlay() {
+    const features = [];
+    currentMission.assets.forEach((asset) => {
+      if (asset.lat && asset.lon) {
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(asset.lon), Number(asset.lat)] },
+          properties: { name: asset.name, role: asset.roleTags?.join(', '), type: asset.type }
+        });
+      }
+    });
+    if (!features.length) {
+      alert('No asset coordinates available to export.');
+      return;
+    }
+    const geojson = { type: 'FeatureCollection', features };
+    const dataStr = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(geojson, null, 2));
+    const a = document.createElement('a');
+    a.setAttribute('href', dataStr);
+    a.setAttribute('download', `${currentMission.missionMeta?.name || 'mission'}-overlay.geojson`);
+    a.click();
+  }
+
+  function evaluateCommsRisk() {
+    const mesh = currentMission.imports?.mesh;
+    if (!mesh || !Array.isArray(mesh.links)) return false;
+    const marginalLinks = mesh.links.filter((l) => /marginal|unlikely/i.test(l.quality || ''));
+    const nodes = new Set();
+    mesh.links.forEach((l) => {
+      if (l.from) nodes.add(l.from);
+      if (l.to) nodes.add(l.to);
+    });
+    const degree = {};
+    mesh.links.forEach((l) => {
+      degree[l.from] = (degree[l.from] || 0) + 1;
+      degree[l.to] = (degree[l.to] || 0) + 1;
+    });
+    const singlePoints = Object.values(degree).filter((d) => d === 1).length;
+    const commsAssignments = currentMission.assignments.filter((a) => a.requiresComms || a.critical);
+    return commsAssignments.length > 0 && (marginalLinks.length === mesh.links.length || singlePoints > 0);
   }
 
   /** Init **/
   function init() {
     missions = loadFromStorage();
-    currentMission = missions[missions.length - 1] ? JSON.parse(JSON.stringify(missions[missions.length - 1])) : null;
+    currentMission = missions[missions.length - 1] ? hydrateMission(JSON.parse(JSON.stringify(missions[missions.length - 1]))) : null;
     if (!currentMission) createNewMission();
     renderAll();
     bindEvents();
+  }
+
+  function hydrateMission(m) {
+    if (!m.missionMeta) {
+      m.missionMeta = {
+        name: m.name || '',
+        classificationBanner: m.classificationBanner || 'UNCLASSIFIED',
+        ao: m.ao || '',
+        unitOrDetachment: m.unitOrDetachment || '',
+        createdOn: m.createdOn || new Date().toISOString().split('T')[0],
+        createdBy: m.createdBy || '',
+        missionType: m.missionType || 'Recon',
+        durationHours: 0,
+        altitudeBand: 'Surface',
+        temperatureBand: 'Temperate'
+      };
+    }
+    if (!m.assignments) m.assignments = [];
+    if (!m.imports) m.imports = { nodes: [], platforms: [], mesh: null };
+    return m;
   }
 
   document.addEventListener('DOMContentLoaded', init);

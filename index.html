@@ -80,6 +80,22 @@
           <label>Date / Time Window<input id="missionTime" type="text" placeholder="H+0 to H+72"></label>
           <label>Created By<input id="missionCreator" type="text" placeholder="Planner name"></label>
           <label>Created On<input id="missionDate" type="date"></label>
+          <label>Mission Duration (hrs)
+            <div class="inline-input">
+              <input id="missionDuration" type="number" min="0" placeholder="0">
+              <div class="chip-row">
+                <button class="secondary-btn" type="button" data-duration="24">24h</button>
+                <button class="secondary-btn" type="button" data-duration="48">48h</button>
+                <button class="secondary-btn" type="button" data-duration="72">72h</button>
+              </div>
+            </div>
+          </label>
+          <label>Altitude Band
+            <select id="missionAltitude"></select>
+          </label>
+          <label>Temperature Band
+            <select id="missionTemperature"></select>
+          </label>
         </div>
         <div class="button-row">
           <button id="newMissionBtn" class="secondary-btn">New Mission</button>
@@ -111,6 +127,11 @@
               <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
             </div>
           </div>
+          <div class="button-row">
+            <button id="importNodeBtn" type="button" class="secondary-btn">Import Node Designs</button>
+            <button id="importPlatformBtn" type="button" class="secondary-btn">Import Platform Designs</button>
+            <button id="importMeshBtn" type="button" class="secondary-btn">Import Mesh JSON</button>
+          </div>
         </details>
       </section>
 
@@ -133,6 +154,11 @@
         <div class="asset-table" id="assetTable"></div>
         <h3>Assignment Matrix</h3>
         <div id="assignmentMatrix" class="matrix"></div>
+        <div class="panel-header">
+          <h3>Roles &amp; Phase Assignments</h3>
+          <button id="addAssignmentBtn" class="primary-btn" type="button">Add Assignment</button>
+        </div>
+        <div id="roleAssignment" class="asset-table"></div>
       </section>
 
       <section id="constraints" class="panel">
@@ -154,9 +180,12 @@
             <button id="printBtn" class="secondary-btn">Print / Save as PDF</button>
             <button id="downloadJsonBtn" class="primary-btn">Download Mission JSON</button>
             <button id="copyJsonBtn" class="secondary-btn">Copy Mission JSON</button>
+            <button id="exportOverlayBtn" class="secondary-btn">Export Mission Overlay</button>
           </div>
         </div>
         <article id="missionBrief" class="brief"></article>
+        <section class="feasibility" id="feasibilityPanel"></section>
+        <section class="cards" id="missionCards"></section>
         <div class="export-block">
           <div class="panel-header">
             <h3>ATAK JSON Stub</h3>
