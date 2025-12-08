@@ -7,7 +7,7 @@
   <script src="mission_project.js"></script>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+  <body>
   <div id="access-gate" style="display: none;">
     <div class="gate-card">
       <h1>Ceradon Systems — Ceradon Mission Architect Demo</h1>
@@ -46,6 +46,7 @@
   </div>
 
   <div id="app-root" style="display: none;">
+    <div id="statusBanner" class="status-banner" style="display:none;"></div>
     <header class="top-nav">
       <div class="branding">
         <div class="title">Ceradon Mission Architect</div>
@@ -59,7 +60,7 @@
         <button class="nav-btn" data-target="brief">Mission Brief / Export</button>
         <button class="nav-btn" data-target="mission-cards">Mission Cards</button>
       </nav>
-      <button id="loadExampleBtn" class="accent-btn">Load Example Mission</button>
+      <button id="loadExampleBtn" class="accent-btn">Load WHITEFROST Demo</button>
     </header>
 
     <main>
@@ -107,6 +108,8 @@
             <div id="savedMissionsList" class="dropdown-content"></div>
           </div>
           <button id="deleteMissionBtn" class="danger-btn">Delete Mission</button>
+          <button id="importMissionProjectBtn" class="secondary-btn">Import MissionProject</button>
+          <input type="file" id="missionProjectFile" accept="application/json" style="display:none" />
         </div>
 
         <details class="integrations">
@@ -180,9 +183,9 @@
           <h2>Mission Brief / Export</h2>
           <div class="button-row">
             <button id="printBtn" class="secondary-btn">Print / Save as PDF</button>
-            <button id="downloadJsonBtn" class="primary-btn">Download Mission JSON</button>
-            <button id="copyJsonBtn" class="secondary-btn">Copy Mission JSON</button>
-            <button id="exportOverlayBtn" class="secondary-btn">Export Mission Overlay</button>
+            <button id="downloadJsonBtn" class="primary-btn">Export MissionProject</button>
+            <button id="copyJsonBtn" class="secondary-btn">Copy MissionProject JSON</button>
+            <button id="exportOverlayBtn" class="secondary-btn">Export GeoJSON</button>
           </div>
         </div>
         <article id="missionBrief" class="brief"></article>

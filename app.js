@@ -2,6 +2,7 @@
 (function () {
   let project = null;
   let currentMission = null;
+  let bannerTimeout = null;
 
   const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
   const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
@@ -13,16 +14,31 @@
     { id: 'EXFIL', name: 'Exfil', description: 'Withdraw and recover', tasks: [], assetsUsed: [] }
   ];
 
+  function showBanner(message, tone = 'info') {
+    const banner = document.getElementById('statusBanner');
+    if (!banner) return;
+    banner.textContent = message;
+    banner.className = `status-banner ${tone}`;
+    banner.style.display = 'block';
+    if (bannerTimeout) clearTimeout(bannerTimeout);
+    bannerTimeout = setTimeout(() => {
+      banner.style.display = 'none';
+    }, 5000);
+  }
+
   /** Utility **/
   const uuid = () => 'id-' + Math.random().toString(36).substring(2, 9);
   const findMissionIndex = (id) => (project.meta.savedMissions || []).findIndex((m) => m.id === id);
 
   function ensureProject() {
-    if (!project) project = loadMissionProject();
+    if (!project) project = normalizeMissionProject(loadMissionProject());
     if (!project.meta) project.meta = {};
     if (!project.meta.savedMissions) project.meta.savedMissions = [];
+    if (!project.environment) project.environment = { altitudeBand: 'Surface', temperatureBand: 'Temperate' };
+    if (!project.constraints) project.constraints = [];
     if (!project.mission) project.mission = createEmptyMissionProject().mission;
     currentMission = hydrateMission(project.mission);
+    applyProjectEnvelope();
   }
 
   function syncMetaFromMission() {
@@ -35,14 +51,83 @@
       altitudeBand: meta.altitudeBand || 'Surface',
       temperatureBand: meta.temperatureBand || 'Temperate',
       savedMissions: project.meta.savedMissions || [],
-      lastUpdated: new Date().toISOString()
+      lastUpdated: new Date().toISOString(),
+      origin_tool: 'mission'
     };
+    project.environment = {
+      ...project.environment,
+      ao: meta.ao || currentMission.ao || project.environment?.ao || '',
+      altitudeBand: meta.altitudeBand || project.environment?.altitudeBand || 'Surface',
+      temperatureBand: meta.temperatureBand || project.environment?.temperatureBand || 'Temperate',
+      weather: currentMission.constraints.environment || project.environment?.weather || '',
+      logisticsNotes: currentMission.constraints.logisticsConstraints || project.environment?.logisticsNotes || ''
+    };
+    project.constraints = buildConstraintArrayFromMission();
   }
 
   function persistProject() {
     syncMetaFromMission();
     project.mission = currentMission;
     saveMissionProject(project);
+  }
+
+  function applyProjectEnvelope() {
+    if (!project || !currentMission) return;
+    const env = project.environment || {};
+    currentMission.missionMeta = {
+      ...currentMission.missionMeta,
+      ao: currentMission.missionMeta.ao || env.ao || '',
+      altitudeBand: currentMission.missionMeta.altitudeBand || env.altitudeBand || 'Surface',
+      temperatureBand: currentMission.missionMeta.temperatureBand || env.temperatureBand || 'Temperate'
+    };
+    if (!currentMission.constraints.environment && env.weather) currentMission.constraints.environment = env.weather;
+    if (!currentMission.constraints.logisticsConstraints && env.logisticsNotes)
+      currentMission.constraints.logisticsConstraints = env.logisticsNotes;
+    if (Array.isArray(project.constraints) && project.constraints.length) mergeConstraintsIntoMission(project.constraints);
+  }
+
+  function buildConstraintArrayFromMission(targetMission = currentMission) {
+    const constraintMap = [
+      { key: 'timeWindow', label: 'time' },
+      { key: 'environment', label: 'environment' },
+      { key: 'rfConstraints', label: 'rf' },
+      { key: 'logisticsConstraints', label: 'logistics' },
+      { key: 'riskNotes', label: 'risk' }
+    ];
+    const items = constraintMap
+      .map((entry) => {
+        const value = targetMission?.constraints?.[entry.key];
+        if (!value) return null;
+        const existing = (project?.constraints || []).find((c) => c.type === entry.label && c.description === value);
+        return {
+          id: existing?.id || `${entry.label}-${Math.random().toString(36).slice(2, 6)}`,
+          type: entry.label,
+          description: value,
+          severity: /risk|rf/i.test(entry.label) ? 'caution' : 'info'
+        };
+      })
+      .filter(Boolean);
+    const success = (targetMission?.constraints?.successCriteria || []).map((desc) => {
+      const existing = (project?.constraints || []).find((c) => c.type === 'success-criteria' && c.description === desc);
+      return {
+        id: existing?.id || `success-${Math.random().toString(36).slice(2, 6)}`,
+        type: 'success-criteria',
+        description: desc,
+        severity: 'info'
+      };
+    });
+    return [...items, ...success];
+  }
+
+  function mergeConstraintsIntoMission(list) {
+    if (!Array.isArray(list)) return;
+    const envNotes = list.find((c) => c.type === 'environment');
+    if (envNotes && !currentMission.constraints.environment) currentMission.constraints.environment = envNotes.description;
+    const rfNotes = list.find((c) => c.type === 'rf');
+    if (rfNotes && !currentMission.constraints.rfConstraints) currentMission.constraints.rfConstraints = rfNotes.description;
+    const logistics = list.find((c) => c.type === 'logistics');
+    if (logistics && !currentMission.constraints.logisticsConstraints)
+      currentMission.constraints.logisticsConstraints = logistics.description;
   }
 
   function createNewMission() {
@@ -58,136 +143,268 @@
   }
 
   function createExampleMission() {
-    currentMission = {
-      id: uuid(),
-      missionMeta: {
-        name: 'Fjord Recon Lane',
-        classificationBanner: 'UNCLASSIFIED // TRAINING USE',
-        ao: 'Nordic fjord complex, austere cold-weather',
-        unitOrDetachment: 'Bravo Troop / Team Vantage',
-        createdOn: new Date().toISOString().split('T')[0],
-        createdBy: 'Planner X',
-        missionType: 'Recon',
-        durationHours: 48,
-        altitudeBand: 'Low',
-        temperatureBand: 'Cold'
-      },
-      phases: [
-        {
-          id: 'ORP',
-          name: 'ORP',
-          description: 'Stage at ORP, final pre-comms, kit check',
-          startCondition: 'H-2 established ORP',
-          endCondition: 'Teams ready to step',
-          tasks: ['Final CSI node config', 'Mesh relay power check', 'Brief EMCON plan'],
-          assetsUsed: [],
-          emconConsiderations: 'Low-power checks only'
-        },
-        {
-          id: 'INFIL',
-          name: 'Infil',
-          description: 'Split infil along valley floor',
-          startCondition: 'Step off H-0',
-          endCondition: 'Teams in position',
-          tasks: ['FPV relay overwatch', 'Mule UGV hauls resupply kit'],
-          assetsUsed: [],
-          emconConsiderations: 'RF minimal, passive listening'
-        },
-        {
-          id: 'ON_STATION',
-          name: 'On-Station',
-          description: 'ISR and mesh soak',
-          startCondition: 'Teams set ORP overwatch',
-          endCondition: 'Collection complete',
-          tasks: ['Deploy Vantage CSI nodes', 'Record CSI for pose tracking trial', 'Logistics check every 2 hrs'],
-          assetsUsed: [],
-          emconConsiderations: 'Directional links preferred'
-        },
-        {
-          id: 'EXFIL',
-          name: 'Exfil',
-          description: 'Recover nodes and depart',
-          startCondition: 'Call sign Vantage ready',
-          endCondition: 'Back through ORP',
-          tasks: ['Recover CSI nodes', 'Secure captures for offline pose inference'],
-          assetsUsed: [],
-          emconConsiderations: 'Burst mesh updates only'
-        }
-      ],
-      assets: getDemoAssets(),
-      assignments: [],
-      imports: {
-        nodes: [],
-        platforms: [],
-        mesh: null
-      },
-      constraints: {
-        timeWindow: 'H+0 to H+48',
-        environment: 'Cold-weather fjord, mixed rocky ridgeline',
-        rfConstraints: 'Deep valley, multipath heavy; prefer elevated relays',
-        logisticsConstraints: 'UGV battery swap every 6 hrs',
-        successCriteria: ['No fratricide', 'ISR coverage of target bay', 'Recover all kit with CSI logs intact'],
-        riskNotes: 'EW sniffers possible; maintain EMCON discipline'
-      }
-    };
-    // seed asset usage
-    const assets = currentMission.assets.map((a) => a.id);
-    currentMission.phases.forEach((p, idx) => {
-      p.assetsUsed = idx === 1 ? assets.filter((_, i) => i < 3) : assets.filter((_, i) => i % 2 === 0);
-    });
+    const today = new Date().toISOString().split('T')[0];
+    const whitefrost = buildWhitefrostScenario(today);
+    currentMission = hydrateMission(whitefrost.mission);
     project.mission = currentMission;
+    project.nodes = whitefrost.nodes;
+    project.platforms = whitefrost.platforms;
+    project.kits = whitefrost.kits;
+    project.mesh_links = whitefrost.mesh_links;
+    project.environment = whitefrost.environment;
+    project.constraints = whitefrost.constraints;
     renderAll();
     persistProject();
+    showBanner('Loaded WHITEFROST Demo — cold-weather recon lane.', 'info');
   }
 
   function getDemoAssets() {
+    return buildWhitefrostAssets();
+  }
+
+  function buildWhitefrostAssets() {
     return [
       {
         id: uuid(),
-        name: 'Vantage CSI Node Alpha',
-        type: 'NODE',
-        sourceTool: 'NodeArchitect',
-        roleTags: ['CSI', 'recon', 'through-wall'],
-        ownerElement: 'Team Vantage',
-        notes: 'Primary CSI capture node'
-      },
-      {
-        id: uuid(),
-        name: 'FPV Relay Quad',
+        name: 'WF Recon Quad (3D-printed)',
         type: 'UXS',
         sourceTool: 'UxSArchitect',
-        roleTags: ['relay', 'overwatch'],
-        ownerElement: 'Air det',
-        notes: 'Loitering mesh overwatch'
+        roleTags: ['recon', 'mesh-client'],
+        ownerElement: 'Vantage Scout Team',
+        notes: 'Cold-weather tuned props; focus on route recon.',
+        enduranceMinutes: 35,
+        rfBand: '2.4GHz',
+        batteryWh: 98,
+        powerDrawWatts: 180,
+        lat: 68.2471,
+        lon: 17.9774,
+        elevation: 1180
       },
       {
         id: uuid(),
-        name: 'Ground Mesh Relay',
+        name: 'Mesh Relay Mast (Cold WX)',
         type: 'MESH_ELEMENT',
         sourceTool: 'MeshArchitect',
-        roleTags: ['backbone', 'mesh'],
-        ownerElement: 'Signal',
-        notes: 'Drop-in relay with mast'
+        roleTags: ['backbone', 'relay'],
+        ownerElement: 'Signal Det',
+        notes: 'Drop-in pole with insulated Li-ion pack.',
+        rfBand: '900MHz',
+        batteryWh: 140,
+        powerDrawWatts: 22,
+        lat: 68.2504,
+        lon: 17.965,
+        elevation: 1240
       },
       {
         id: uuid(),
-        name: 'Resupply Mule UGV',
-        type: 'UXS',
-        sourceTool: 'UxSArchitect',
-        roleTags: ['logistics', 'hauler'],
-        ownerElement: 'Support',
-        notes: 'Carries sustainment kit'
+        name: 'CSI Node Alpha',
+        type: 'NODE',
+        sourceTool: 'NodeArchitect',
+        roleTags: ['CSI', 'pose-trial'],
+        ownerElement: 'Team Vantage',
+        notes: 'Primary CSI capture for pose estimation.',
+        rfBand: '5GHz',
+        batteryWh: 65,
+        powerDrawWatts: 18,
+        lat: 68.2429,
+        lon: 17.9882,
+        elevation: 1120
       },
       {
         id: uuid(),
-        name: 'Light RF Kit',
+        name: 'CSI Node Bravo',
+        type: 'NODE',
+        sourceTool: 'NodeArchitect',
+        roleTags: ['CSI', 'redundant'],
+        ownerElement: 'Team Vantage',
+        notes: 'Secondary CSI node for cross-correlation.',
+        rfBand: '5GHz',
+        batteryWh: 65,
+        powerDrawWatts: 18,
+        lat: 68.2402,
+        lon: 17.9721,
+        elevation: 1090
+      },
+      {
+        id: uuid(),
+        name: 'Partner Sustainment Pack',
         type: 'KIT',
         sourceTool: 'KitSmith',
-        roleTags: ['RF', 'signals'],
-        ownerElement: 'Team Vantage',
-        notes: 'Batteries, filters, SDRs'
+        roleTags: ['batteries', 'partner-force'],
+        ownerElement: 'Partner Force Patrol',
+        notes: 'AA/18650 cache, hand warmers, tarp for bivy.',
+        batteryWh: 220,
+        powerDrawWatts: 0,
+        lat: 68.2465,
+        lon: 17.9698,
+        elevation: 1155
       }
     ];
+  }
+
+  function buildWhitefrostScenario(today) {
+    const assets = buildWhitefrostAssets();
+    const missionId = `whitefrost-${Math.random().toString(36).slice(2, 7)}`;
+    const phases = [
+      {
+        id: 'ORP',
+        name: 'ORP',
+        description: 'Cold-soak gear, final comms checks, rehearse EMCON.',
+        startCondition: 'Teams staged at snowy ORP, H-2',
+        endCondition: 'Air/ground checks green',
+        tasks: ['Battery pre-warm and wrap', 'Mesh mast erected 8m', 'Short burst check back to hub'],
+        assetsUsed: [assets[1].id, assets[4].id],
+        emconConsiderations: 'Low power, no video streaming until step-off'
+      },
+      {
+        id: 'INFIL',
+        name: 'Infil',
+        description: 'Low-signature movement along ridgeline to recon points.',
+        startCondition: 'Step-off H-0',
+        endCondition: 'CSI nodes set',
+        tasks: ['Recon quad clears path', 'Partner force caches sustainment', 'CSI Alpha and Bravo placed 30m apart'],
+        assetsUsed: [assets[0].id, assets[2].id, assets[3].id, assets[4].id],
+        emconConsiderations: 'Directional antennas only; burst telemetry on down-slope'
+      },
+      {
+        id: 'ON_STATION',
+        name: 'On-Station',
+        description: 'Through-wall pose capture at mountain compound.',
+        startCondition: 'Nodes synced and logging',
+        endCondition: 'CSI capture complete; 3 hrs log target',
+        tasks: [
+          'Record CSI streams for pose estimation',
+          'Monitor mesh link quality; rotate relay battery at H+3',
+          'Collect temperature/battery sag notes'
+        ],
+        assetsUsed: [assets[0].id, assets[1].id, assets[2].id, assets[3].id],
+        emconConsiderations: 'Keep RF to narrow beams; avoid omni beacons'
+      },
+      {
+        id: 'EXFIL',
+        name: 'Exfil',
+        description: 'Recover kit and depart before forecasted icing.',
+        startCondition: 'Mission lead calls ENDEX',
+        endCondition: 'All kit recovered; data sealed',
+        tasks: ['Swap to warm batteries', 'Secure CSI logs to SSD', 'Mesh mast dropped; pack-out with partner patrol'],
+        assetsUsed: [assets[0].id, assets[2].id, assets[3].id],
+        emconConsiderations: 'Burst updates only; radios dark through valley'
+      }
+    ];
+
+    const constraints = {
+      timeWindow: 'H+0 to H+48 (forecasted icing after H+52)',
+      environment: 'Cold, -18°C night / -8°C day, light snow, gusts to 18kt',
+      rfConstraints: 'Ridgeline shadowing; UHF links preferred; limited GPS lock in draws',
+      logisticsConstraints: 'Quad batteries lose 20% in cold; partner team carries spare cells and hand warmers',
+      successCriteria: [
+        'Collect 3 hrs usable CSI for pose estimation',
+        'Maintain mesh reachback to ORP with >1 relay path',
+        'No frozen packs; every kit returns with >30% reserve'
+      ],
+      riskNotes: 'Icing on props possible; monitor power draw; avoid extended hover at altitude'
+    };
+
+    const mission = {
+      id: missionId,
+      missionMeta: {
+        name: 'WHITEFROST Demo',
+        classificationBanner: 'UNCLASSIFIED // TRAINING USE',
+        ao: 'Mountain basin, subarctic ridgeline',
+        unitOrDetachment: 'Project WHITEFROST demo cell',
+        createdOn: today,
+        createdBy: 'Mission Architect Demo',
+        missionType: 'Recon / CSI Trial',
+        durationHours: 48,
+        altitudeBand: 'High',
+        temperatureBand: 'Cold'
+      },
+      phases,
+      assets,
+      assignments: [],
+      imports: {
+        nodes: assets.filter((a) => a.type === 'NODE'),
+        platforms: assets.filter((a) => a.type === 'UXS'),
+        mesh: { links: [] },
+        kits: assets.filter((a) => a.type === 'KIT')
+      },
+      constraints
+    };
+
+    const nodes = assets
+      .filter((a) => a.type === 'NODE' || a.type === 'MESH_ELEMENT')
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        role: a.roleTags?.join(', ') || '',
+        rf_band: a.rfBand || '',
+        power_draw_watts: a.powerDrawWatts || null,
+        battery_wh: a.batteryWh || null,
+        lat: a.lat,
+        lon: a.lon,
+        elevation: a.elevation,
+        origin_tool: a.type === 'MESH_ELEMENT' ? 'mesh' : 'node'
+      }));
+
+    const platforms = assets
+      .filter((a) => a.type === 'UXS')
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        role: a.roleTags?.join(', ') || '',
+        rf_band: a.rfBand || '',
+        endurance_hours: getAssetEnduranceHours(a) || 0.6,
+        battery_wh: a.batteryWh || null,
+        power_draw_watts: a.powerDrawWatts || null,
+        lat: a.lat,
+        lon: a.lon,
+        elevation: a.elevation,
+        origin_tool: 'uxs'
+      }));
+
+    const kits = assets
+      .filter((a) => a.type === 'KIT')
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        contents: a.notes,
+        battery_wh: a.batteryWh || null,
+        origin_tool: 'kit'
+      }));
+
+    const mesh_links = [
+      {
+        id: `link-${Math.random().toString(36).slice(2, 7)}`,
+        from: assets[1].id,
+        to: assets[2].id,
+        quality: 'Strong',
+        rf_band: '900MHz',
+        notes: 'Mast to CSI Alpha',
+        origin_tool: 'mesh'
+      },
+      {
+        id: `link-${Math.random().toString(36).slice(2, 7)}`,
+        from: assets[1].id,
+        to: assets[3].id,
+        quality: 'Marginal',
+        rf_band: '900MHz',
+        notes: 'Mast to CSI Bravo (shadowed ridge)',
+        origin_tool: 'mesh'
+      }
+    ];
+
+    const environment = {
+      ao: mission.missionMeta.ao,
+      altitudeBand: mission.missionMeta.altitudeBand,
+      temperatureBand: mission.missionMeta.temperatureBand,
+      elevationRef: 1100,
+      weather: constraints.environment,
+      logisticsNotes: constraints.logisticsConstraints
+    };
+
+    const constraintArray = buildConstraintArrayFromMission(mission);
+
+    return { mission, nodes, platforms, mesh_links, kits, environment, constraints: constraintArray };
   }
 
   /** Rendering **/
@@ -471,7 +688,7 @@
       ${constraints}
     `;
 
-    const missionJson = JSON.stringify(m, null, 2);
+    const missionJson = JSON.stringify(buildMissionProjectPayload(), null, 2);
     document.getElementById('atakStub').value = JSON.stringify(buildAtakStub(m), null, 2);
     document.getElementById('copyJsonBtn').onclick = () => copyToClipboard(missionJson);
     document.getElementById('copyAtakBtn').onclick = () => copyToClipboard(document.getElementById('atakStub').value);
@@ -603,6 +820,10 @@
     document.getElementById('newMissionBtn').addEventListener('click', createNewMission);
     document.getElementById('saveMissionBtn').addEventListener('click', saveCurrentMission);
     document.getElementById('deleteMissionBtn').addEventListener('click', deleteCurrentMission);
+    document.getElementById('importMissionProjectBtn').addEventListener('click', () =>
+      document.getElementById('missionProjectFile').click()
+    );
+    document.getElementById('missionProjectFile').addEventListener('change', downloadMissionProjectFromFile);
     document.getElementById('loadMissionBtn').addEventListener('click', toggleSavedList);
     document.getElementById('addPhaseBtn').addEventListener('click', addPhase);
     document.getElementById('addAssetBtn').addEventListener('click', addAssetPrompt);
@@ -899,9 +1120,10 @@
       renderAssignmentMatrix();
       renderBrief();
       persistProject();
-      alert(`Added ${parsed.length} assets`);
+      showBanner(`Added ${parsed.length} assets from ${type} JSON.`, 'info');
     } catch (err) {
-      alert('Invalid JSON');
+      console.error(err);
+      showBanner('Invalid JSON payload.', 'danger');
     }
   }
 
@@ -920,7 +1142,8 @@
           if (type === 'platform') addImportedPlatforms(data);
           if (type === 'mesh') addImportedMesh(data);
         } catch (err) {
-          alert('Invalid JSON file');
+          console.error(err);
+          showBanner('Invalid JSON file.', 'danger');
         }
       };
       reader.readAsText(file);
@@ -931,28 +1154,32 @@
   function addImportedNodes(data) {
     const parsed = parseNodeArchitectJson(data);
     currentMission.imports.nodes = parsed;
+    project.nodes = parsed.map((node) => ({ ...node, origin_tool: 'node', id: node.id || uuid() }));
     currentMission.assets.push(
       ...parsed.map((node) => ({
         ...node,
         type: 'NODE',
-        critical: Boolean(node.critical)
+        critical: Boolean(node.critical),
+        origin_tool: 'node'
       }))
     );
     renderAssets();
     renderAssignmentMatrix();
     renderBrief();
     persistProject();
-    alert(`Imported ${parsed.length} node designs`);
+    showBanner(`Imported ${parsed.length} node designs.`, 'info');
   }
 
   function addImportedPlatforms(data) {
     const parsed = parsePlatformArchitectJson(data);
     currentMission.imports.platforms = parsed;
+    project.platforms = parsed.map((p) => ({ ...p, origin_tool: 'uxs', id: p.id || uuid() }));
     currentMission.assets.push(
       ...parsed.map((platform) => ({
         ...platform,
         type: 'PLATFORM',
-        critical: Boolean(platform.critical)
+        critical: Boolean(platform.critical),
+        origin_tool: 'uxs'
       }))
     );
     renderAssets();
@@ -960,14 +1187,17 @@
     renderFeasibility();
     renderBrief();
     persistProject();
-    alert(`Imported ${parsed.length} platform designs`);
+    showBanner(`Imported ${parsed.length} platform designs.`, 'info');
   }
 
   function addImportedMesh(data) {
     currentMission.imports.mesh = data;
+    project.mesh_links = Array.isArray(data?.links)
+      ? data.links.map((l) => ({ ...l, id: l.id || uuid(), origin_tool: 'mesh' }))
+      : [];
     renderFeasibility();
     persistProject();
-    alert('Mesh data imported');
+    showBanner('Mesh data imported.', 'info');
   }
 
   /** Storage **/
@@ -1018,12 +1248,148 @@
   }
 
   /** Export helpers **/
+  function buildMissionProjectPayload() {
+    syncMetaFromMission();
+    const links = project.mesh_links?.length
+      ? project.mesh_links
+      : project.mission?.imports?.mesh?.links || currentMission.imports?.mesh?.links || [];
+    const nodesFromAssets = currentMission.assets
+      .filter((a) => a.type === 'NODE' || a.type === 'MESH_ELEMENT')
+      .map((a) => convertAssetToElement(a, a.type === 'MESH_ELEMENT' ? 'mesh' : 'node'));
+    const platformsFromAssets = currentMission.assets
+      .filter((a) => a.type === 'UXS' || a.type === 'PLATFORM')
+      .map((a) => convertAssetToElement(a, 'uxs'));
+    const kitsFromAssets = currentMission.assets.filter((a) => a.type === 'KIT').map((a) => convertAssetToElement(a, 'kit'));
+
+    return normalizeMissionProject({
+      schema: 'MissionProject',
+      schemaVersion: MISSION_PROJECT_SCHEMA_VERSION,
+      origin_tool: 'mission',
+      meta: project.meta,
+      mission: currentMission,
+      environment: project.environment,
+      constraints: buildConstraintArrayFromMission(),
+      nodes: [...project.nodes, ...nodesFromAssets],
+      platforms: [...project.platforms, ...platformsFromAssets],
+      kits: [...project.kits, ...kitsFromAssets],
+      mesh_links: links.map((l) => ({ ...l, id: l.id || uuid(), origin_tool: l.origin_tool || 'mesh' }))
+    });
+  }
+
+  function convertAssetToElement(asset, origin_tool = 'mission') {
+    return {
+      id: asset.id || uuid(),
+      name: asset.name,
+      role: (asset.roleTags || []).join(', '),
+      rf_band: asset.rfBand || asset.frequency || '',
+      power_draw_watts: asset.powerDrawWatts || null,
+      battery_wh: asset.batteryWh || null,
+      endurance_hours: getAssetEnduranceHours(asset),
+      lat: asset.lat || asset.latitude || null,
+      lon: asset.lon || asset.lng || asset.longitude || null,
+      elevation: asset.elevation || null,
+      origin_tool
+    };
+  }
+
   function downloadMissionJson() {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(currentMission, null, 2));
+    const payload = buildMissionProjectPayload();
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
-    a.setAttribute('download', `${currentMission.name || 'mission'}.json`);
+    a.setAttribute('download', `${currentMission.name || 'mission'}-MissionProject.json`);
     a.click();
+  }
+
+  function downloadMissionProjectFromFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        importMissionProject(data);
+        showBanner('MissionProject imported successfully.', 'info');
+      } catch (err) {
+        console.error(err);
+        showBanner('Invalid MissionProject JSON.', 'danger');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function importMissionProject(data) {
+    project = normalizeMissionProject(data);
+    currentMission = hydrateMission(project.mission);
+    applyProjectEnvelope();
+    renderAll();
+    persistProject();
+  }
+
+  function buildGeoJsonPayload() {
+    const mp = buildMissionProjectPayload();
+    const features = [];
+    const pointProps = (item, label) => ({
+      name: item.name,
+      role: item.role,
+      type: label,
+      origin_tool: item.origin_tool
+    });
+
+    mp.nodes.forEach((node) => {
+      if (node.lat != null && node.lon != null)
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(node.lon), Number(node.lat)] },
+          properties: pointProps(node, 'node')
+        });
+    });
+    mp.platforms.forEach((platform) => {
+      if (platform.lat != null && platform.lon != null)
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(platform.lon), Number(platform.lat)] },
+          properties: pointProps(platform, 'platform')
+        });
+    });
+    mp.kits.forEach((kit) => {
+      if (kit.lat != null && kit.lon != null)
+        features.push({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [Number(kit.lon), Number(kit.lat)] },
+          properties: pointProps(kit, 'kit')
+        });
+    });
+
+    const nodeLookup = Object.fromEntries(
+      [...mp.nodes, ...mp.platforms, ...mp.kits].map((n) => [n.id, { lat: n.lat, lon: n.lon, name: n.name, origin: n.origin_tool }])
+    );
+    mp.mesh_links.forEach((link) => {
+      const from = nodeLookup[link.from];
+      const to = nodeLookup[link.to];
+      if (from?.lat != null && to?.lat != null) {
+        features.push({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [Number(from.lon), Number(from.lat)],
+              [Number(to.lon), Number(to.lat)]
+            ]
+          },
+          properties: {
+            id: link.id,
+            from: link.from,
+            to: link.to,
+            quality: link.quality,
+            rf_band: link.rf_band,
+            origin_tool: link.origin_tool || 'mesh'
+          }
+        });
+      }
+    });
+
+    return { type: 'FeatureCollection', features };
   }
 
   function copyToClipboard(text) {
@@ -1031,42 +1397,43 @@
   }
 
   function buildAtakStub(m) {
+    const mp = buildMissionProjectPayload();
     return {
-      ceradonMissionVersion: '1.0',
-      missionMeta: {
+      schema: 'CoT-lite',
+      mission: {
         id: m.id,
         name: m.missionMeta?.name || m.name,
-        classificationBanner: m.missionMeta?.classificationBanner || m.classificationBanner,
-        ao: m.missionMeta?.ao || m.ao,
         unit: m.missionMeta?.unitOrDetachment || m.unitOrDetachment,
-        time: m.constraints.timeWindow,
-        createdBy: m.missionMeta?.createdBy || m.createdBy,
-        createdOn: m.missionMeta?.createdOn || m.createdOn,
-        missionType: m.missionMeta?.missionType || m.missionType,
-        durationHours: m.missionMeta?.durationHours,
+        ao: m.missionMeta?.ao || m.ao,
+        timeframe: m.constraints.timeWindow,
         altitudeBand: m.missionMeta?.altitudeBand,
         temperatureBand: m.missionMeta?.temperatureBand
       },
-      phases: m.phases.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        startCondition: p.startCondition,
-        endCondition: p.endCondition,
-        tasks: p.tasks,
-        assets: p.assetsUsed,
-        emcon: p.emconConsiderations
-      })),
-      assets: m.assets.map((a) => ({
-        id: a.id,
-        name: a.name,
-        type: a.type,
-        sourceTool: a.sourceTool,
-        roleTags: a.roleTags,
-        ownerElement: a.ownerElement,
-        notes: a.notes
-      })),
-      assignments: m.assignments || []
+      units: [
+        ...mp.nodes.map((n) => ({
+          id: n.id,
+          callsign: n.name,
+          role: n.role,
+          lat: n.lat,
+          lon: n.lon,
+          elev: n.elevation,
+          rf_band: n.rf_band,
+          type: 'node',
+          origin_tool: n.origin_tool
+        })),
+        ...mp.platforms.map((p) => ({
+          id: p.id,
+          callsign: p.name,
+          role: p.role,
+          lat: p.lat,
+          lon: p.lon,
+          elev: p.elevation,
+          rf_band: p.rf_band,
+          type: 'platform',
+          origin_tool: p.origin_tool
+        }))
+      ],
+      links: mp.mesh_links.map((l) => ({ id: l.id, from: l.from, to: l.to, quality: l.quality, rf_band: l.rf_band }))
     };
   }
 
@@ -1113,21 +1480,11 @@
   }
 
   function downloadMissionOverlay() {
-    const features = [];
-    currentMission.assets.forEach((asset) => {
-      if (asset.lat && asset.lon) {
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [Number(asset.lon), Number(asset.lat)] },
-          properties: { name: asset.name, role: asset.roleTags?.join(', '), type: asset.type }
-        });
-      }
-    });
-    if (!features.length) {
-      alert('No asset coordinates available to export.');
+    const geojson = buildGeoJsonPayload();
+    if (!geojson.features.length) {
+      showBanner('No coordinates available to export.', 'danger');
       return;
     }
-    const geojson = { type: 'FeatureCollection', features };
     const dataStr = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(geojson, null, 2));
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
