@@ -20,3 +20,7 @@ Static single-page app for Ceradon Mission Architect, served via GitHub Pages wi
 ## Mission card and overlay export
 - Add role assignments to generate per-team mission cards (print-friendly). Use the **Print / Save as PDF** control from the Mission Brief panel.
 - Use **Export Mission Overlay** to download a GeoJSON file containing points for any assets with coordinates, ready for ATAK or other mapping tools.
+
+## MissionProject schema and exports
+- Mission Architect now reads/writes the shared **MissionProject** JSON schema (v1.1.0) used across the Architect Stack. See `docs/mission_project_schema.md`.
+- Export controls produce full MissionProject bundles plus GeoJSON overlays and a CoT-like stub for ATAK-style ingest. Details in `docs/atak_exports.md`.

@@ -56,6 +56,18 @@ body {
   font-size: 0.95rem;
 }
 
+.status-banner {
+  padding: 10px 14px;
+  margin: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0c1f28;
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.status-banner.danger { border-color: var(--danger); color: var(--danger); background: #2a1318; }
+.status-banner.info { border-color: var(--accent-2); color: #cdefff; }
+
 a { color: var(--accent); }
 
 .demo-request {
