@@ -4,8 +4,8 @@ Static single-page app for Ceradon Mission Architect, served via GitHub Pages wi
 
 ## Mission planner highlights
 - Mission metadata now includes duration (with 24/48/72 hr presets), altitude band, and temperature band. Metadata is stored under `missionMeta` and persisted in `localStorage`.
-- Import Node/Platform/Mesh JSON exports directly from architect tools and keep them offline.
-- Assign assets to phases/roles, flag critical dependencies, and mark tasks that require comms redundancy.
+- Import Node/Platform/Mesh/Kits or full MissionProject bundles directly from Architect tools and keep them offline.
+- Assign assets to phases/roles, flag critical dependencies, and mark tasks that require comms redundancy. Phase summaries stay synced to the shared MissionProject.
 - Feasibility panel estimates sorties vs. endurance, counts critical platforms, and flags sustainment/comms risk.
 - Generate printable mission cards plus GeoJSON overlays (ATAK-compatible) for assets with latitude/longitude.
 
@@ -24,3 +24,4 @@ Static single-page app for Ceradon Mission Architect, served via GitHub Pages wi
 ## MissionProject schema and exports
 - Mission Architect now reads/writes the shared **MissionProject** JSON schema (v1.1.0) used across the Architect Stack. See `docs/mission_project_schema.md`.
 - Export controls produce full MissionProject bundles plus GeoJSON overlays and a CoT-like stub for ATAK-style ingest. Details in `docs/atak_exports.md`.
+- A neutral demo mission is included to quickly populate phases, assets, constraints, and environment settings without any real-world references.

@@ -10,8 +10,8 @@
   <body>
   <div id="access-gate" style="display: none;">
     <div class="gate-card">
-      <h1>Ceradon Systems — Ceradon Mission Architect Demo</h1>
-      <p class="gate-subtitle">Enter your demo access code to continue.</p>
+      <h1>Ceradon Mission Architect</h1>
+      <p class="gate-subtitle">Part of the Ceradon Architect planning suite. Enter your access code to continue.</p>
       <label for="demo-code">Access code</label>
       <input id="demo-code" type="password" autocomplete="off" placeholder="Enter access code">
       <button id="demo-enter" class="primary-btn">Enter</button>
@@ -60,7 +60,7 @@
         <button class="nav-btn" data-target="brief">Mission Brief / Export</button>
         <button class="nav-btn" data-target="mission-cards">Mission Cards</button>
       </nav>
-      <button id="loadExampleBtn" class="accent-btn">Load WHITEFROST Demo</button>
+      <button id="loadExampleBtn" class="accent-btn">Load demo mission</button>
     </header>
 
     <main>
@@ -108,28 +108,29 @@
             <div id="savedMissionsList" class="dropdown-content"></div>
           </div>
           <button id="deleteMissionBtn" class="danger-btn">Delete Mission</button>
-          <button id="importMissionProjectBtn" class="secondary-btn">Import MissionProject</button>
+          <button id="importMissionProjectBtn" class="secondary-btn">Import MissionProject JSON</button>
           <input type="file" id="missionProjectFile" accept="application/json" style="display:none" />
         </div>
 
         <details class="integrations">
-          <summary>Integrations (stubs for future data ingest)</summary>
+          <summary>Advanced import helpers</summary>
+          <p class="muted">Paste JSON from other Architect tools to merge nodes, platforms, mesh links, or kits into the shared MissionProject.</p>
           <div class="grid two-col">
             <div>
-              <label>Paste Node Architect JSON<textarea id="nodeJson"></textarea></label>
+              <label>Paste Node Architect JSON (updates nodes)<textarea id="nodeJson"></textarea></label>
               <button data-parse="node" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
             </div>
             <div>
-              <label>Paste UxS Architect JSON<textarea id="uxsJson"></textarea></label>
+              <label>Paste UxS Architect JSON (updates platforms)<textarea id="uxsJson"></textarea></label>
               <button data-parse="uxs" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
             </div>
             <div>
-              <label>Paste Mesh Architect JSON<textarea id="meshJson"></textarea></label>
-              <button data-parse="mesh" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+              <label>Paste Mesh Architect JSON (updates mesh_links)<textarea id="meshJson"></textarea></label>
+              <button data-parse="mesh" class="secondary-btn parse-btn">Parse &amp; Add Links</button>
             </div>
             <div>
-              <label>Paste KitSmith JSON<textarea id="kitJson"></textarea></label>
-              <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
+              <label>Paste KitSmith JSON (updates kits)<textarea id="kitJson"></textarea></label>
+              <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Kits</button>
             </div>
           </div>
           <div class="button-row">
@@ -160,6 +161,10 @@
         <h3>Assignment Matrix</h3>
         <div id="assignmentMatrix" class="matrix"></div>
         <div class="panel-header">
+          <h3>Phase &amp; Asset Summary</h3>
+        </div>
+        <div id="phaseAssetSummary" class="phase-summary"></div>
+        <div class="panel-header">
           <h3>Roles &amp; Phase Assignments</h3>
           <button id="addAssignmentBtn" class="primary-btn" type="button">Add Assignment</button>
         </div>
@@ -186,7 +191,7 @@
           <h2>Mission Brief / Export</h2>
           <div class="button-row">
             <button id="printBtn" class="secondary-btn">Print / Save as PDF</button>
-            <button id="downloadJsonBtn" class="primary-btn">Export MissionProject</button>
+            <button id="downloadJsonBtn" class="primary-btn">Export MissionProject JSON</button>
             <button id="copyJsonBtn" class="secondary-btn">Copy MissionProject JSON</button>
             <button id="exportOverlayBtn" class="secondary-btn">Export GeoJSON</button>
           </div>
