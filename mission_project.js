@@ -40,6 +40,9 @@ function createEmptyMissionProject() {
         environment: '',
         rfConstraints: '',
         logisticsConstraints: '',
+        maxSorties: null,
+        minBatteryReserve: null,
+        requireRfCoverage: false,
         successCriteria: [],
         riskNotes: ''
       }

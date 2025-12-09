@@ -173,6 +173,9 @@
           <label>Environment<input id="constraintEnvironment" type="text"></label>
           <label>RF / EW Constraints<textarea id="constraintRf"></textarea></label>
           <label>Logistics Constraints<textarea id="constraintLogistics"></textarea></label>
+          <label>Max Sorties<input id="constraintSorties" type="number" min="0" placeholder="e.g., 6"></label>
+          <label>Min Battery Reserve (%)<input id="constraintReserve" type="number" min="0" max="100" step="5"></label>
+          <label class="checkbox-row"><input type="checkbox" id="constraintRfCoverage"> Require RF coverage redundancy</label>
         </div>
         <label>Success Criteria<div id="successCriteriaList" class="editable-list"></div></label>
         <label>Risk Notes<textarea id="constraintRisk"></textarea></label>
