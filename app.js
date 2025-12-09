@@ -6,6 +6,7 @@
 
   const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
   const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
+  const missionElements = ['Core Team', 'Partner Element', 'ISR Cell', 'Sustainment / Mesh Support'];
 
   const defaultPhases = [
     { id: 'ORP', name: 'ORP', description: 'Objective Rally Point setup', tasks: [], assetsUsed: [] },
@@ -38,6 +39,7 @@
     if (!project.constraints) project.constraints = [];
     if (!project.mission) project.mission = createEmptyMissionProject().mission;
     currentMission = hydrateMission(project.mission);
+    hydrateAssetsFromProject();
     applyProjectEnvelope();
   }
 
@@ -92,17 +94,21 @@
       { key: 'environment', label: 'environment' },
       { key: 'rfConstraints', label: 'rf' },
       { key: 'logisticsConstraints', label: 'logistics' },
+      { key: 'maxSorties', label: 'max-sorties' },
+      { key: 'minBatteryReserve', label: 'battery-reserve' },
+      { key: 'requireRfCoverage', label: 'rf-coverage' },
       { key: 'riskNotes', label: 'risk' }
     ];
     const items = constraintMap
       .map((entry) => {
         const value = targetMission?.constraints?.[entry.key];
-        if (!value) return null;
+        const include = typeof value === 'boolean' ? value : value !== undefined && value !== null && value !== '';
+        if (!include) return null;
         const existing = (project?.constraints || []).find((c) => c.type === entry.label && c.description === value);
         return {
           id: existing?.id || `${entry.label}-${Math.random().toString(36).slice(2, 6)}`,
           type: entry.label,
-          description: value,
+          description: typeof value === 'boolean' ? (value ? 'Required' : 'Not required') : value,
           severity: /risk|rf/i.test(entry.label) ? 'caution' : 'info'
         };
       })
@@ -128,6 +134,14 @@
     const logistics = list.find((c) => c.type === 'logistics');
     if (logistics && !currentMission.constraints.logisticsConstraints)
       currentMission.constraints.logisticsConstraints = logistics.description;
+    const sorties = list.find((c) => c.type === 'max-sorties');
+    if (sorties && !currentMission.constraints.maxSorties) currentMission.constraints.maxSorties = Number(sorties.description) || null;
+    const reserve = list.find((c) => c.type === 'battery-reserve');
+    if (reserve && !currentMission.constraints.minBatteryReserve)
+      currentMission.constraints.minBatteryReserve = Number(reserve.description) || null;
+    const rfRedundant = list.find((c) => c.type === 'rf-coverage');
+    if (rfRedundant && currentMission.constraints.requireRfCoverage === false)
+      currentMission.constraints.requireRfCoverage = /require/i.test(rfRedundant.description || '');
   }
 
   function createNewMission() {
@@ -297,6 +311,9 @@
       environment: 'Cold, -18°C night / -8°C day, light snow, gusts to 18kt',
       rfConstraints: 'Ridgeline shadowing; UHF links preferred; limited GPS lock in draws',
       logisticsConstraints: 'Quad batteries lose 20% in cold; partner team carries spare cells and hand warmers',
+      maxSorties: 6,
+      minBatteryReserve: 30,
+      requireRfCoverage: true,
       successCriteria: [
         'Collect 3 hrs usable CSI for pose estimation',
         'Maintain mesh reachback to ORP with >1 relay path',
@@ -562,6 +579,18 @@
                     .join('')}
                 </select>
               </td>
+              <td>
+                <select data-assign-field="team" data-id="${a.id}">
+                  ${missionElements
+                    .map((el) => `<option value="${el}" ${el === a.team ? 'selected' : ''}>${el}</option>`)
+                    .join('')}
+                  ${
+                    a.team && !missionElements.includes(a.team)
+                      ? `<option value="${a.team}" selected>${a.team}</option>`
+                      : ''
+                  }
+                </select>
+              </td>
               <td><input data-assign-field="role" data-id="${a.id}" value="${a.role || ''}" placeholder="Role" /></td>
               <td><input data-assign-field="notes" data-id="${a.id}" value="${a.notes || ''}" placeholder="Employment notes" /></td>
               <td class="center"><input type="checkbox" data-assign-field="critical" data-id="${a.id}" ${a.critical ? 'checked' : ''}></td>
@@ -572,7 +601,7 @@
             </tr>`;
         })
         .join('');
-      container.innerHTML = `<table><thead><tr><th>Asset</th><th>Phase</th><th>Role</th><th>Notes</th><th>Critical</th><th>Needs Comms</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      container.innerHTML = `<table><thead><tr><th>Asset</th><th>Phase</th><th>Element</th><th>Role</th><th>Notes</th><th>Critical</th><th>Needs Comms</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     container.querySelectorAll('[data-assign-field]').forEach((el) => {
       el.addEventListener('input', onAssignmentFieldChange);
@@ -608,6 +637,15 @@
     document.getElementById('constraintEnvironment').value = currentMission.constraints.environment || '';
     document.getElementById('constraintRf').value = currentMission.constraints.rfConstraints || '';
     document.getElementById('constraintLogistics').value = currentMission.constraints.logisticsConstraints || '';
+    document.getElementById('constraintSorties').value =
+      currentMission.constraints.maxSorties !== null && currentMission.constraints.maxSorties !== undefined
+        ? currentMission.constraints.maxSorties
+        : '';
+    document.getElementById('constraintReserve').value =
+      currentMission.constraints.minBatteryReserve !== null && currentMission.constraints.minBatteryReserve !== undefined
+        ? currentMission.constraints.minBatteryReserve
+        : '';
+    document.getElementById('constraintRfCoverage').checked = Boolean(currentMission.constraints.requireRfCoverage);
     document.getElementById('constraintRisk').value = currentMission.constraints.riskNotes || '';
 
     const list = document.getElementById('successCriteriaList');
@@ -667,6 +705,13 @@
       <ul>
         ${(m.constraints.successCriteria || []).map((s) => `<li>${s}</li>`).join('')}
       </ul>
+      <p><strong>Max Sorties:</strong> ${m.constraints.maxSorties || 'n/a'}</p>
+      <p><strong>Battery Reserve:</strong> ${
+        m.constraints.minBatteryReserve !== null && m.constraints.minBatteryReserve !== undefined
+          ? `${m.constraints.minBatteryReserve}%`
+          : 'n/a'
+      }</p>
+      <p><strong>RF Coverage Redundant:</strong> ${m.constraints.requireRfCoverage ? 'Required' : 'Best effort'}</p>
       <p><strong>RF / EW:</strong> ${m.constraints.rfConstraints || 'n/a'}</p>
       <p><strong>Logistics:</strong> ${m.constraints.logisticsConstraints || 'n/a'}</p>
       <p><strong>Risk:</strong> ${m.constraints.riskNotes || 'n/a'}</p>
@@ -863,6 +908,15 @@
     document.getElementById('constraintEnvironment').addEventListener('input', (e) => updateConstraint('environment', e.target.value));
     document.getElementById('constraintRf').addEventListener('input', (e) => updateConstraint('rfConstraints', e.target.value));
     document.getElementById('constraintLogistics').addEventListener('input', (e) => updateConstraint('logisticsConstraints', e.target.value));
+    document.getElementById('constraintSorties').addEventListener('input', (e) =>
+      updateConstraint('maxSorties', e.target.value ? Number(e.target.value) : null)
+    );
+    document.getElementById('constraintReserve').addEventListener('input', (e) =>
+      updateConstraint('minBatteryReserve', e.target.value ? Number(e.target.value) : null)
+    );
+    document.getElementById('constraintRfCoverage').addEventListener('change', (e) =>
+      updateConstraint('requireRfCoverage', e.target.checked)
+    );
     document.getElementById('constraintRisk').addEventListener('input', (e) => updateConstraint('riskNotes', e.target.value));
 
     document.querySelectorAll('.parse-btn').forEach((btn) => btn.addEventListener('click', onParseClick));
@@ -1011,6 +1065,7 @@
       id: uuid(),
       assetId: currentMission.assets[0].id,
       phaseId: currentMission.phases[0].id,
+      team: missionElements[0],
       role: '',
       notes: '',
       critical: false,
@@ -1261,12 +1316,22 @@
       .map((a) => convertAssetToElement(a, 'uxs'));
     const kitsFromAssets = currentMission.assets.filter((a) => a.type === 'KIT').map((a) => convertAssetToElement(a, 'kit'));
 
+    const missionPayload = {
+      ...currentMission,
+      imports: {
+        nodes: project.nodes || [],
+        platforms: project.platforms || [],
+        mesh: { links },
+        kits: project.kits || []
+      }
+    };
+
     return normalizeMissionProject({
       schema: 'MissionProject',
       schemaVersion: MISSION_PROJECT_SCHEMA_VERSION,
       origin_tool: 'mission',
       meta: project.meta,
-      mission: currentMission,
+      mission: missionPayload,
       environment: project.environment,
       constraints: buildConstraintArrayFromMission(),
       nodes: [...project.nodes, ...nodesFromAssets],
@@ -1289,6 +1354,25 @@
       lon: asset.lon || asset.lng || asset.longitude || null,
       elevation: asset.elevation || null,
       origin_tool
+    };
+  }
+
+  function convertElementToAsset(element, type, sourceTool = 'mission') {
+    return {
+      id: element.id || uuid(),
+      name: element.name || `${type} asset`,
+      type,
+      sourceTool,
+      roleTags: element.role ? element.role.split(',').map((r) => r.trim()).filter(Boolean) : element.roleTags || [],
+      ownerElement: element.owner || element.ownerElement || '',
+      notes: element.notes || '',
+      rfBand: element.rf_band || element.rfBand,
+      batteryWh: element.battery_wh,
+      powerDrawWatts: element.power_draw_watts,
+      enduranceHours: element.endurance_hours,
+      lat: element.lat,
+      lon: element.lon,
+      elevation: element.elevation || null
     };
   }
 
@@ -1321,9 +1405,30 @@
   function importMissionProject(data) {
     project = normalizeMissionProject(data);
     currentMission = hydrateMission(project.mission);
+    hydrateAssetsFromProject();
+    currentMission.imports = {
+      nodes: project.nodes || [],
+      platforms: project.platforms || [],
+      mesh: { links: project.mesh_links || [] },
+      kits: project.kits || []
+    };
     applyProjectEnvelope();
     renderAll();
     persistProject();
+  }
+
+  function hydrateAssetsFromProject() {
+    const fromProject = [
+      ...(project.nodes || []).map((n) => convertElementToAsset(n, 'NODE', n.origin_tool || 'node')),
+      ...(project.platforms || []).map((p) => convertElementToAsset(p, 'UXS', p.origin_tool || 'uxs')),
+      ...(project.kits || []).map((k) => convertElementToAsset(k, 'KIT', k.origin_tool || 'kit'))
+    ];
+    const existing = currentMission.assets || [];
+    const mergedMap = new Map();
+    [...fromProject, ...existing].forEach((asset) => {
+      if (!mergedMap.has(asset.id)) mergedMap.set(asset.id, asset);
+    });
+    currentMission.assets = Array.from(mergedMap.values());
   }
 
   function buildGeoJsonPayload() {
@@ -1544,6 +1649,9 @@
         environment: '',
         rfConstraints: '',
         logisticsConstraints: '',
+        maxSorties: null,
+        minBatteryReserve: null,
+        requireRfCoverage: false,
         successCriteria: [],
         riskNotes: ''
       };
