@@ -226,6 +226,30 @@ textarea { min-height: 90px; resize: vertical; }
 .matrix th, .matrix td { padding: 8px; border-bottom: 1px solid var(--border); text-align: center; }
 .matrix th { background: #0d191f; }
 
+.phase-summary {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0d191f;
+  padding: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+.phase-summary-row {
+  display: grid;
+  grid-template-columns: 2fr 3fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0f1c24;
+}
+.phase-summary-title { display: flex; flex-direction: column; gap: 4px; }
+.phase-summary-assets { font-size: 0.95rem; }
+
 .editable-list { display: grid; gap: 8px; margin: 8px 0; }
 .editable-list .row { display: flex; gap: 8px; align-items: center; }
 .editable-list input { flex: 1; }
