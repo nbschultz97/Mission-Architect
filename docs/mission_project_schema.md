@@ -5,7 +5,7 @@ The **MissionProject** JSON file is the shared interchange format across the Cer
 ```json
 {
   "schema": "MissionProject",
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "2.0.0",
   "origin_tool": "mission",
   "meta": { ... },
   "mission": { ... },
