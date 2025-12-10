@@ -31,6 +31,34 @@
   const uuid = () => 'id-' + Math.random().toString(36).substring(2, 9);
   const findMissionIndex = (id) => (project.meta.savedMissions || []).findIndex((m) => m.id === id);
 
+  function validateMission(target = currentMission) {
+    if (!target) return { ok: false, errors: ['Mission not initialized'] };
+    const errors = [];
+    const meta = target.missionMeta || {};
+    if (!meta.name) errors.push('Add a mission name.');
+    if (!meta.ao) errors.push('Specify an AO/location.');
+    if (!target.constraints?.timeWindow) errors.push('Add a mission time window.');
+    if (!Array.isArray(target.phases) || !target.phases.length) errors.push('Add at least one phase.');
+    const hasAssets = Array.isArray(target.assets) && target.assets.length > 0;
+    const hasAssignedAssets = (target.phases || []).some((p) => Array.isArray(p.assetsUsed) && p.assetsUsed.length > 0);
+    if (hasAssets && !hasAssignedAssets) errors.push('Assign at least one asset to a phase.');
+    return { ok: errors.length === 0, errors };
+  }
+
+  function requireValidMission(contextLabel = 'Action') {
+    const validation = validateMission();
+    if (!validation.ok) {
+      showBanner(`${contextLabel} blocked: ${validation.errors.join(' ')}`, 'danger');
+      return false;
+    }
+    return true;
+  }
+
+  function getValidatedMissionProject(contextLabel = 'Export') {
+    if (!requireValidMission(contextLabel)) return null;
+    return buildMissionProjectPayload();
+  }
+
   function ensureProject() {
     if (!project) project = normalizeMissionProject(loadMissionProject());
     if (!project.meta) project.meta = {};
@@ -770,10 +798,18 @@
       ${constraints}
     `;
 
-    const missionJson = JSON.stringify(buildMissionProjectPayload(), null, 2);
-    document.getElementById('atakStub').value = JSON.stringify(buildAtakStub(m), null, 2);
-    document.getElementById('copyJsonBtn').onclick = () => copyToClipboard(missionJson);
-    document.getElementById('copyAtakBtn').onclick = () => copyToClipboard(document.getElementById('atakStub').value);
+    const missionProjectPayload = buildMissionProjectPayload();
+    document.getElementById('atakStub').value = JSON.stringify(buildAtakStub(missionProjectPayload), null, 2);
+    document.getElementById('copyJsonBtn').onclick = () => {
+      const payload = getValidatedMissionProject('Copy MissionProject JSON');
+      if (!payload) return;
+      copyToClipboard(JSON.stringify(payload, null, 2));
+    };
+    document.getElementById('copyAtakBtn').onclick = () => {
+      const payload = getValidatedMissionProject('Copy ATAK stub');
+      if (!payload) return;
+      copyToClipboard(JSON.stringify(buildAtakStub(payload), null, 2));
+    };
 
     renderMissionCards();
     renderFeasibility();
@@ -1246,6 +1282,7 @@
 
   /** Storage **/
   function saveCurrentMission() {
+    if (!requireValidMission('Save mission')) return;
     const snapshot = JSON.parse(JSON.stringify(currentMission));
     const idx = findMissionIndex(currentMission.id);
     if (idx >= 0) project.meta.savedMissions[idx] = snapshot;
@@ -1321,14 +1358,23 @@
       }
     };
 
+    const environment = {
+      ...project.environment,
+      ao: missionPayload.missionMeta?.ao || project.environment?.ao || '',
+      altitudeBand: missionPayload.missionMeta?.altitudeBand || project.environment?.altitudeBand,
+      temperatureBand: missionPayload.missionMeta?.temperatureBand || project.environment?.temperatureBand,
+      weather: missionPayload.constraints?.environment || project.environment?.weather || '',
+      logisticsNotes: missionPayload.constraints?.logisticsConstraints || project.environment?.logisticsNotes || ''
+    };
+
     return normalizeMissionProject({
       schema: 'MissionProject',
       schemaVersion: MISSION_PROJECT_SCHEMA_VERSION,
       origin_tool: 'mission',
       meta: project.meta,
       mission: missionPayload,
-      environment: project.environment,
-      constraints: buildConstraintArrayFromMission(),
+      environment,
+      constraints: buildConstraintArrayFromMission(missionPayload),
       nodes: [...project.nodes, ...nodesFromAssets],
       platforms: [...project.platforms, ...platformsFromAssets],
       kits: [...project.kits, ...kitsFromAssets],
@@ -1372,7 +1418,8 @@
   }
 
   function downloadMissionJson() {
-    const payload = buildMissionProjectPayload();
+    const payload = getValidatedMissionProject('Export MissionProject JSON');
+    if (!payload) return;
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(payload, null, 2));
     const a = document.createElement('a');
     a.setAttribute('href', dataStr);
@@ -1427,8 +1474,7 @@
     currentMission.assets = Array.from(mergedMap.values());
   }
 
-  function buildGeoJsonPayload() {
-    const mp = buildMissionProjectPayload();
+  function buildGeoJsonPayload(mp = buildMissionProjectPayload()) {
     const features = [];
     const pointProps = (item, label) => ({
       name: item.name,
@@ -1497,8 +1543,9 @@
     navigator.clipboard?.writeText(text);
   }
 
-  function buildAtakStub(m) {
-    const mp = buildMissionProjectPayload();
+  function buildAtakStub(missionProject) {
+    const mp = missionProject || buildMissionProjectPayload();
+    const m = mp.mission || currentMission;
     return {
       schema: 'CoT-lite',
       mission: {
@@ -1511,7 +1558,7 @@
         temperatureBand: m.missionMeta?.temperatureBand
       },
       units: [
-        ...mp.nodes.map((n) => ({
+        ...(mp.nodes || []).map((n) => ({
           id: n.id,
           callsign: n.name,
           role: n.role,
@@ -1522,7 +1569,7 @@
           type: 'node',
           origin_tool: n.origin_tool
         })),
-        ...mp.platforms.map((p) => ({
+        ...(mp.platforms || []).map((p) => ({
           id: p.id,
           callsign: p.name,
           role: p.role,
@@ -1534,7 +1581,7 @@
           origin_tool: p.origin_tool
         }))
       ],
-      links: mp.mesh_links.map((l) => ({ id: l.id, from: l.from, to: l.to, quality: l.quality, rf_band: l.rf_band }))
+      links: (mp.mesh_links || []).map((l) => ({ id: l.id, from: l.from, to: l.to, quality: l.quality, rf_band: l.rf_band }))
     };
   }
 
@@ -1666,7 +1713,9 @@
   }
 
   function downloadMissionOverlay() {
-    const geojson = buildGeoJsonPayload();
+    const payload = getValidatedMissionProject('Export GeoJSON overlay');
+    if (!payload) return;
+    const geojson = buildGeoJsonPayload(payload);
     if (!geojson.features.length) {
       showBanner('No coordinates available to export.', 'danger');
       return;

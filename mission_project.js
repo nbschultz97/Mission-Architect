@@ -1,4 +1,4 @@
-const MISSION_PROJECT_SCHEMA_VERSION = '1.1.0';
+const MISSION_PROJECT_SCHEMA_VERSION = '2.0.0';
 const MISSION_PROJECT_STORAGE_KEY = 'ceradonMissionProject';
 
 function createEmptyMissionProject() {
@@ -63,27 +63,84 @@ function createEmptyMissionProject() {
   };
 }
 
+function migrateMissionProject(raw) {
+  if (!raw || typeof raw !== 'object') return createEmptyMissionProject();
+  const isLegacy = !raw.schemaVersion || /^1\./.test(raw.schemaVersion) || raw.version === '1';
+  if (!isLegacy) return raw;
+
+  const today = new Date().toISOString().split('T')[0];
+  const base = createEmptyMissionProject();
+  const legacyMission = raw.mission || raw;
+  const missionMeta = {
+    ...base.mission.missionMeta,
+    ...(legacyMission.missionMeta || {}),
+    name: legacyMission.missionMeta?.name || legacyMission.name || raw.name || '',
+    ao: legacyMission.missionMeta?.ao || legacyMission.ao || raw.ao || '',
+    unitOrDetachment:
+      legacyMission.missionMeta?.unitOrDetachment || legacyMission.unitOrDetachment || raw.unitOrDetachment || '',
+    classificationBanner: legacyMission.missionMeta?.classificationBanner || legacyMission.classificationBanner ||
+      raw.classificationBanner || base.mission.missionMeta.classificationBanner,
+    createdOn: legacyMission.missionMeta?.createdOn || legacyMission.createdOn || raw.createdOn || today,
+    createdBy: legacyMission.missionMeta?.createdBy || legacyMission.createdBy || raw.createdBy || '',
+    missionType: legacyMission.missionMeta?.missionType || legacyMission.missionType || raw.missionType || 'Recon',
+    durationHours: legacyMission.missionMeta?.durationHours || legacyMission.durationHours || raw.durationHours || 0,
+    altitudeBand: legacyMission.missionMeta?.altitudeBand || legacyMission.altitudeBand || raw.altitudeBand || 'Surface',
+    temperatureBand:
+      legacyMission.missionMeta?.temperatureBand || legacyMission.temperatureBand || raw.temperatureBand || 'Temperate'
+  };
+
+  const constraints = {
+    ...base.mission.constraints,
+    ...(legacyMission.constraints || {}),
+    timeWindow: legacyMission.constraints?.timeWindow || legacyMission.timeWindow || raw.timeWindow || ''
+  };
+
+  return {
+    ...raw,
+    schema: 'MissionProject',
+    schemaVersion: MISSION_PROJECT_SCHEMA_VERSION,
+    origin_tool: raw.origin_tool || 'mission',
+    mission: {
+      ...base.mission,
+      ...legacyMission,
+      missionMeta,
+      constraints,
+      imports: legacyMission.imports || { nodes: raw.nodes || [], platforms: raw.platforms || [], mesh: raw.mesh || null, kits: raw.kits || [] }
+    },
+    environment: {
+      ...base.environment,
+      ...(raw.environment || {}),
+      ao: missionMeta.ao || raw.environment?.ao || ''
+    }
+  };
+}
+
 function normalizeMissionProject(raw) {
   const base = createEmptyMissionProject();
-  if (!raw || typeof raw !== 'object') return base;
-  const project = { ...base, ...raw };
+  const migrated = migrateMissionProject(raw);
+  if (!migrated || typeof migrated !== 'object') return base;
+  const project = { ...base, ...migrated };
   project.schema = 'MissionProject';
-  project.schemaVersion = raw.schemaVersion || raw.version || base.schemaVersion;
-  project.origin_tool = raw.origin_tool || 'mission';
-  project.meta = { ...base.meta, ...(raw.meta || {}) };
+  project.schemaVersion = migrated.schemaVersion || migrated.version || base.schemaVersion;
+  project.origin_tool = migrated.origin_tool || 'mission';
+  project.meta = { ...base.meta, ...(migrated.meta || {}) };
   project.meta.origin_tool = project.meta.origin_tool || 'mission';
-  project.mission = { ...base.mission, ...(raw.mission || raw) };
+  project.mission = { ...base.mission, ...(migrated.mission || migrated) };
   project.mission.origin_tool = project.mission.origin_tool || 'mission';
   project.mission.missionMeta = { ...base.mission.missionMeta, ...(project.mission.missionMeta || {}) };
   project.mission.imports = { ...base.mission.imports, ...(project.mission.imports || {}) };
   project.mission.constraints = { ...base.mission.constraints, ...(project.mission.constraints || {}) };
 
-  project.nodes = Array.isArray(raw.nodes) ? raw.nodes : base.nodes;
-  project.platforms = Array.isArray(raw.platforms) ? raw.platforms : base.platforms;
-  project.mesh_links = Array.isArray(raw.mesh_links) ? raw.mesh_links : Array.isArray(raw.mesh?.links) ? raw.mesh.links : base.mesh_links;
-  project.kits = Array.isArray(raw.kits) ? raw.kits : base.kits;
-  project.environment = { ...base.environment, ...(raw.environment || {}) };
-  project.constraints = Array.isArray(raw.constraints) ? raw.constraints : base.constraints;
+  project.nodes = Array.isArray(migrated.nodes) ? migrated.nodes : base.nodes;
+  project.platforms = Array.isArray(migrated.platforms) ? migrated.platforms : base.platforms;
+  project.mesh_links = Array.isArray(migrated.mesh_links)
+    ? migrated.mesh_links
+    : Array.isArray(migrated.mesh?.links)
+    ? migrated.mesh.links
+    : base.mesh_links;
+  project.kits = Array.isArray(migrated.kits) ? migrated.kits : base.kits;
+  project.environment = { ...base.environment, ...(migrated.environment || {}) };
+  project.constraints = Array.isArray(migrated.constraints) ? migrated.constraints : base.constraints;
 
   // Backwards compatibility for legacy imports stored under mission.imports
   if (Array.isArray(project.mission.imports?.nodes) && !project.nodes.length) project.nodes = project.mission.imports.nodes;
