@@ -52,6 +52,7 @@
         <div class="title">Ceradon Mission Architect</div>
         <div class="subtitle">Mission-level planner for Ceradon Architect Stack</div>
       </div>
+      <div class="version-chip" id="headerVersion"></div>
       <nav class="nav-tabs">
         <button class="nav-btn" data-target="setup">1) Mission Setup</button>
         <button class="nav-btn" data-target="phases">2) Phases</button>
@@ -114,7 +115,7 @@
 
         <details class="integrations">
           <summary>Advanced import helpers</summary>
-          <p class="muted">Paste JSON from other Architect tools to merge nodes, platforms, mesh links, or kits into the shared MissionProject.</p>
+          <p class="muted helper-text">Paste JSON from other Architect tools when you want to merge Nodes, UxS platforms, Mesh links, or KitSmith kits into the current MissionProject. Use full MissionProject imports when you need the entire mission and constraints bundle. Unknown keys are preserved and exported, and schemaVersion is respected when round-tripping.</p>
           <div class="grid two-col">
             <div>
               <label>Paste Node Architect JSON (updates nodes)<textarea id="nodeJson"></textarea></label>
@@ -201,7 +202,7 @@
         <div class="export-block">
           <div class="panel-header">
             <h3>ATAK JSON Stub</h3>
-            <button id="copyAtakBtn" class="secondary-btn">Copy Stub</button>
+            <button id="copyAtakBtn" class="secondary-btn">Copy ATAK Stub</button>
           </div>
           <textarea id="atakStub" readonly></textarea>
         </div>
@@ -220,13 +221,24 @@
         <div id="missionSummaryBanner" class="mission-summary"></div>
         <section class="cards" id="missionCards"></section>
       </section>
+
+      <section id="change-log" class="panel change-log-panel">
+        <div class="panel-header">
+          <h2>Change Log</h2>
+          <p class="muted">Latest updates to the Ceradon Mission Architect SPA.</p>
+        </div>
+        <div id="changeLogList" class="change-log-list"></div>
+      </section>
     </main>
+    <footer class="app-footer">
+      <div id="footerVersion"></div>
+    </footer>
   </div>
 
   <script src="app.js"></script>
   <script>
     const ACCESS_CODE = "MISSION-ORB-593";
-    const STORAGE_KEY = "ceradonDemoAuthorized";
+    const STORAGE_KEY = "ceradon_demo_code";
 
     document.addEventListener("DOMContentLoaded", () => {
       const gate = document.getElementById("access-gate");
@@ -237,14 +249,25 @@
 
       if (!gate || !app || !input || !button || !errorEl) return;
 
+      const legacyFlag = localStorage.getItem("ceradonDemoAuthorized") === "true";
+      if (legacyFlag && !localStorage.getItem(STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, ACCESS_CODE);
+      }
+
       const unlock = () => {
         gate.style.display = "none";
         app.style.display = "block";
       };
 
-      if (localStorage.getItem(STORAGE_KEY) === "true") {
+      const storedCode = localStorage.getItem(STORAGE_KEY);
+
+      if (storedCode === ACCESS_CODE) {
         unlock();
         return;
+      }
+
+      if (storedCode) {
+        input.value = storedCode;
       }
 
       gate.style.display = "flex";
@@ -253,7 +276,7 @@
       const checkCode = () => {
         const value = input.value.trim();
         if (value === ACCESS_CODE) {
-          localStorage.setItem(STORAGE_KEY, "true");
+          localStorage.setItem(STORAGE_KEY, ACCESS_CODE);
           unlock();
         } else {
           errorEl.style.display = "block";

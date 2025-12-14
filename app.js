@@ -8,6 +8,25 @@
   const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
   const missionElements = ['Core Team', 'Partner Element', 'ISR Cell', 'Sustainment / Mesh Support'];
 
+  const CHANGE_LOG = [
+    {
+      version: APP_VERSION,
+      date: '2024-07-01',
+      changes: [
+        'Surfaced app version and MissionProject schema badges with a rolling change log.',
+        'Standardized MissionProject import/export labels and preserved unknown fields with schemaVersion 2.0.0.',
+        'Improved mobile stacking, labels, and table scrolling for Assignment and Mission Cards views.'
+      ]
+    },
+    {
+      version: 'Mission Architect v0.2.0',
+      date: '2024-06-01',
+      changes: [
+        'Baseline MissionProject v2.0.0 compatibility, mission cards export, and neutral demo data pack.'
+      ]
+    }
+  ];
+
   const defaultPhases = [
     { id: 'STAGE', name: 'Staging', description: 'Assemble, validate comms, and brief', tasks: [], assetsUsed: [] },
     { id: 'INFIL', name: 'Infil', description: 'Move to area and establish coverage', tasks: [], assetsUsed: [] },
@@ -460,6 +479,7 @@
   /** Rendering **/
   function renderAll() {
     if (!currentMission) return;
+    renderVersionMeta();
     renderNav();
     renderSetup();
     renderPhases();
@@ -470,6 +490,41 @@
     renderBrief();
     renderSavedMissions();
     renderAssignmentMatrix();
+    renderChangeLog();
+  }
+
+  function renderVersionMeta() {
+    const schemaVersion = typeof MISSIONPROJECT_SCHEMA_VERSION !== 'undefined'
+      ? MISSIONPROJECT_SCHEMA_VERSION
+      : typeof MISSION_PROJECT_SCHEMA_VERSION !== 'undefined'
+      ? MISSION_PROJECT_SCHEMA_VERSION
+      : '2.0.0';
+    const versionText = `${APP_VERSION || 'Mission Architect'} • MissionProject schema v${schemaVersion}`;
+    const header = document.getElementById('headerVersion');
+    const footer = document.getElementById('footerVersion');
+    if (header) header.textContent = versionText;
+    if (footer) footer.textContent = versionText;
+  }
+
+  function renderChangeLog() {
+    const list = document.getElementById('changeLogList');
+    if (!list) return;
+    const entries = [...CHANGE_LOG].sort((a, b) => new Date(b.date) - new Date(a.date));
+    list.innerHTML = entries
+      .map(
+        (entry) => `
+          <article class="change-log-entry">
+            <div class="change-log-header">
+              <div class="change-log-version">${entry.version}</div>
+              <div class="change-log-date">${entry.date}</div>
+            </div>
+            <ul class="change-log-items">
+              ${(entry.changes || []).map((item) => `<li>${item}</li>`).join('')}
+            </ul>
+          </article>
+        `
+      )
+      .join('');
   }
 
   function renderNav() {
@@ -1332,18 +1387,19 @@
   /** Export helpers **/
   function buildMissionProjectPayload() {
     syncMetaFromMission();
-    const links = project.mesh_links?.length
-      ? project.mesh_links
-      : project.mission?.imports?.mesh?.links || currentMission.imports?.mesh?.links || [];
-    const existingNodeIds = new Set((project.nodes || []).map((n) => n.id));
+    const baseProject = normalizeMissionProject(project);
+    const links = baseProject.mesh_links?.length
+      ? baseProject.mesh_links
+      : baseProject.mission?.imports?.mesh?.links || currentMission.imports?.mesh?.links || [];
+    const existingNodeIds = new Set((baseProject.nodes || []).map((n) => n.id));
     const nodesFromAssets = currentMission.assets
       .filter((a) => (a.type === 'NODE' || a.type === 'MESH_ELEMENT') && !existingNodeIds.has(a.id))
       .map((a) => convertAssetToElement(a, a.type === 'MESH_ELEMENT' ? 'mesh' : 'node'));
-    const existingPlatformIds = new Set((project.platforms || []).map((p) => p.id));
+    const existingPlatformIds = new Set((baseProject.platforms || []).map((p) => p.id));
     const platformsFromAssets = currentMission.assets
       .filter((a) => (a.type === 'UXS' || a.type === 'PLATFORM') && !existingPlatformIds.has(a.id))
       .map((a) => convertAssetToElement(a, 'uxs'));
-    const existingKitIds = new Set((project.kits || []).map((k) => k.id));
+    const existingKitIds = new Set((baseProject.kits || []).map((k) => k.id));
     const kitsFromAssets = currentMission.assets
       .filter((a) => a.type === 'KIT' && !existingKitIds.has(a.id))
       .map((a) => convertAssetToElement(a, 'kit'));
@@ -1351,33 +1407,34 @@
     const missionPayload = {
       ...currentMission,
       imports: {
-        nodes: project.nodes || [],
-        platforms: project.platforms || [],
+        nodes: baseProject.nodes || [],
+        platforms: baseProject.platforms || [],
         mesh: { links },
-        kits: project.kits || []
+        kits: baseProject.kits || []
       }
     };
 
     const environment = {
-      ...project.environment,
-      ao: missionPayload.missionMeta?.ao || project.environment?.ao || '',
-      altitudeBand: missionPayload.missionMeta?.altitudeBand || project.environment?.altitudeBand,
-      temperatureBand: missionPayload.missionMeta?.temperatureBand || project.environment?.temperatureBand,
-      weather: missionPayload.constraints?.environment || project.environment?.weather || '',
-      logisticsNotes: missionPayload.constraints?.logisticsConstraints || project.environment?.logisticsNotes || ''
+      ...baseProject.environment,
+      ao: missionPayload.missionMeta?.ao || baseProject.environment?.ao || '',
+      altitudeBand: missionPayload.missionMeta?.altitudeBand || baseProject.environment?.altitudeBand,
+      temperatureBand: missionPayload.missionMeta?.temperatureBand || baseProject.environment?.temperatureBand,
+      weather: missionPayload.constraints?.environment || baseProject.environment?.weather || '',
+      logisticsNotes: missionPayload.constraints?.logisticsConstraints || baseProject.environment?.logisticsNotes || ''
     };
 
     return normalizeMissionProject({
+      ...baseProject,
       schema: 'MissionProject',
-      schemaVersion: MISSION_PROJECT_SCHEMA_VERSION,
+      schemaVersion: MISSIONPROJECT_SCHEMA_VERSION,
       origin_tool: 'mission',
-      meta: project.meta,
+      meta: { ...baseProject.meta, ...project.meta },
       mission: missionPayload,
-      environment,
+      environment: { ...baseProject.environment, ...environment },
       constraints: buildConstraintArrayFromMission(missionPayload),
-      nodes: [...project.nodes, ...nodesFromAssets],
-      platforms: [...project.platforms, ...platformsFromAssets],
-      kits: [...project.kits, ...kitsFromAssets],
+      nodes: [...(baseProject.nodes || []), ...nodesFromAssets],
+      platforms: [...(baseProject.platforms || []), ...platformsFromAssets],
+      kits: [...(baseProject.kits || []), ...kitsFromAssets],
       mesh_links: links.map((l) => ({ ...l, id: l.id || uuid(), origin_tool: l.origin_tool || 'mesh' }))
     });
   }

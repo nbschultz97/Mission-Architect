@@ -1,4 +1,6 @@
-const MISSION_PROJECT_SCHEMA_VERSION = '2.0.0';
+const APP_VERSION = 'Mission Architect v0.3.0';
+const MISSIONPROJECT_SCHEMA_VERSION = '2.0.0';
+const MISSION_PROJECT_SCHEMA_VERSION = MISSIONPROJECT_SCHEMA_VERSION;
 const MISSION_PROJECT_STORAGE_KEY = 'ceradonMissionProject';
 
 function createEmptyMissionProject() {
@@ -182,6 +184,8 @@ function saveMissionProject(project) {
 }
 
 if (typeof window !== 'undefined') {
+  window.APP_VERSION = APP_VERSION;
+  window.MISSIONPROJECT_SCHEMA_VERSION = MISSIONPROJECT_SCHEMA_VERSION;
   window.MISSION_PROJECT_SCHEMA_VERSION = MISSION_PROJECT_SCHEMA_VERSION;
   window.createEmptyMissionProject = createEmptyMissionProject;
   window.loadMissionProject = loadMissionProject;
