@@ -4,12 +4,23 @@
   let currentMission = null;
   let bannerTimeout = null;
   let lastSchemaWarning = null;
+  let pendingImport = null;
 
   const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
   const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
   const missionElements = ['Core Team', 'Partner Element', 'ISR Cell', 'Sustainment / Mesh Support'];
 
   const CHANGE_LOG = [
+    {
+      version: 'Mission Architect Web v1.3',
+      date: '2024-09-01',
+      changes: [
+        'Hardened access gate with non-public access codes and automatic demo mission load on unlock.',
+        'Doctrinal mission presets with descriptive helper text and overwrite confirmation.',
+        'Unified MissionProject and module import panel with schema awareness and merge previews.',
+        'Constraints strengthened with mesh/comm requirements plus C-UAS and EW threat notes, including per-phase risk cues.'
+      ]
+    },
     {
       version: APP_VERSION,
       date: '2024-07-01',
@@ -29,10 +40,42 @@
   ];
 
   const defaultPhases = [
-    { id: 'STAGE', name: 'Staging', description: 'Assemble, validate comms, and brief', tasks: [], assetsUsed: [] },
-    { id: 'INFIL', name: 'Infil', description: 'Move to area and establish coverage', tasks: [], assetsUsed: [] },
-    { id: 'ON_STATION', name: 'On-Station', description: 'Operate on target tasks', tasks: [], assetsUsed: [] },
-    { id: 'EXFIL', name: 'Exfil', description: 'Recover and depart', tasks: [], assetsUsed: [] }
+    {
+      id: 'STAGE',
+      name: 'Staging',
+      description: 'Assemble, validate comms, and brief',
+      tasks: [],
+      assetsUsed: [],
+      requiresMeshCoverage: false,
+      requiresRedundantComms: false
+    },
+    {
+      id: 'INFIL',
+      name: 'Infil',
+      description: 'Move to area and establish coverage',
+      tasks: [],
+      assetsUsed: [],
+      requiresMeshCoverage: false,
+      requiresRedundantComms: false
+    },
+    {
+      id: 'ON_STATION',
+      name: 'On-Station',
+      description: 'Operate on target tasks',
+      tasks: [],
+      assetsUsed: [],
+      requiresMeshCoverage: false,
+      requiresRedundantComms: false
+    },
+    {
+      id: 'EXFIL',
+      name: 'Exfil',
+      description: 'Recover and depart',
+      tasks: [],
+      assetsUsed: [],
+      requiresMeshCoverage: false,
+      requiresRedundantComms: false
+    }
   ];
 
   const missionPresets = {
@@ -45,6 +88,8 @@
         temperatureBand: 'Cold',
         ao: 'Ridge line and valley approaches'
       },
+      description:
+        'Ridge recon lane with mesh relays; 24-36h window in cold alpine terrain. Aligns with SUAS overwatch and relay drills.',
       constraints: {
         environment: 'Cold weather, icing risk, terrain masking',
         rfConstraints: 'Line-of-sight breaks across ridges; plan for mast or relay',
@@ -66,6 +111,8 @@
         temperatureBand: 'Temperate',
         ao: 'Dense urban core with contested spectrum'
       },
+      description:
+        'Urban mesh lane in contested EW zone; 18-24h with dense structures. Tailored to SUAS/C-UAS cross-cueing and mesh agility.',
       constraints: {
         environment: 'Urban canyon multi-path; EW activity expected',
         rfConstraints: 'Avoid known jamming sectors; prefer frequency agility',
@@ -87,6 +134,8 @@
         temperatureBand: 'Temperate',
         ao: 'Partner-held valley with UxS lanes'
       },
+      description:
+        'Partner sustainment lane with UxS telemetry; 36-48h duration and mixed terrain. Syncs with SUAS support to partner caches.',
       constraints: {
         environment: 'Partner sustainment focus with UxS tasking windows',
         rfConstraints: 'Protect partner comms; coordinate mesh for UxS telemetry',
@@ -230,6 +279,8 @@
       { key: 'timeWindow', label: 'time' },
       { key: 'environment', label: 'environment' },
       { key: 'rfConstraints', label: 'rf' },
+      { key: 'expectedCuasThreat', label: 'cuas' },
+      { key: 'ewThreatSummary', label: 'ew' },
       { key: 'logisticsConstraints', label: 'logistics' },
       { key: 'maxSorties', label: 'max-sorties' },
       { key: 'minBatteryReserve', label: 'battery-reserve' },
@@ -293,6 +344,21 @@
     persistProject();
   }
 
+  async function loadDemoMission(auto = false) {
+    try {
+      const response = await fetch('data/whitefrost_demo.json');
+      const data = await response.json();
+      importMissionProject(data);
+      renderAll();
+      persistProject();
+      if (!auto) showBanner('Loaded WHITEFROST demo mission.', 'info');
+    } catch (err) {
+      console.warn('Failed to load demo mission, falling back to local pack.', err);
+      createExampleMission();
+      if (!auto) showBanner('Fallback demo mission loaded (offline pack).', 'warning');
+    }
+  }
+
   function createExampleMission() {
     const today = new Date().toISOString().split('T')[0];
     const demo = buildNeutralDemoScenario(today);
@@ -319,9 +385,13 @@
     showBanner('Loaded demo mission with generic elements.', 'info');
   }
 
-  function applyMissionPreset(key) {
+  function applyPreset(key) {
     const preset = missionPresets[key];
     if (!preset) return;
+    const shouldOverwrite =
+      currentMission.phases?.length > 0 || (currentMission.assets || []).length > 0 || currentMission.constraints?.timeWindow;
+    if (shouldOverwrite && !window.confirm('Apply preset and overwrite mission framing? Existing phases may be replaced.')) return;
+
     const meta = currentMission.missionMeta || {};
     currentMission.missionMeta = {
       ...meta,
@@ -340,14 +410,18 @@
       assetsUsed: [],
       startCondition: phase.startCondition || '',
       endCondition: phase.endCondition || '',
-      emconConsiderations: phase.emconConsiderations || ''
+      emconConsiderations: phase.emconConsiderations || '',
+      requiresMeshCoverage: phase.requiresMeshCoverage ?? true,
+      requiresRedundantComms: phase.requiresRedundantComms ?? false
     }));
     renderSetup();
     renderPhases();
     renderBrief();
     renderAssignmentMatrix();
+    renderFeasibility();
     persistProject();
     showBanner(`Preset applied: ${preset.label}`, 'info');
+    renderPresetHelper(key);
   }
 
   function getDemoAssets() {
@@ -677,6 +751,20 @@
     document.getElementById('missionTemperature').value = meta.temperatureBand || 'Temperate';
     const presetSelect = document.getElementById('missionPreset');
     if (presetSelect) presetSelect.value = meta.presetKey || '';
+    renderPresetHelper(meta.presetKey || presetSelect?.value || '');
+  }
+
+  function renderPresetHelper(key = '') {
+    const helper = document.getElementById('presetHelper');
+    const preset = missionPresets[key];
+    if (!helper) return;
+    if (preset?.description) {
+      helper.textContent = preset.description;
+      return;
+    }
+    const select = document.getElementById('missionPreset');
+    const desc = select?.selectedOptions?.[0]?.dataset?.desc;
+    helper.textContent = desc || 'Applies mission type, duration, environment bands, and phase framing.';
   }
 
   function renderPhases() {
@@ -685,11 +773,13 @@
     currentMission.phases.forEach((phase, idx) => {
       const card = document.createElement('div');
       card.className = 'phase-card';
+      const risk = computePhaseRisk(phase);
       card.innerHTML = `
         <header>
           <div>
             <input type="text" value="${phase.name}" data-phase="${phase.id}" class="phase-name" />
             <div class="summary">${phase.tasks?.length || 0} tasks • ${phase.assetsUsed?.length || 0} assets</div>
+            <div class="pill risk-${risk.level}">${risk.label}</div>
           </div>
           <div class="phase-order">
             <button class="secondary-btn" data-move="up" data-idx="${idx}">↑</button>
@@ -717,12 +807,19 @@
             </select>
           </label>
         </div>
+        <div class="grid two-col">
+          <label class="checkbox-row"><input type="checkbox" data-field="requiresMeshCoverage" data-id="${phase.id}" ${phase.requiresMeshCoverage ? 'checked' : ''}> Requires mesh coverage</label>
+          <label class="checkbox-row"><input type="checkbox" data-field="requiresRedundantComms" data-id="${phase.id}" ${phase.requiresRedundantComms ? 'checked' : ''}> Requires redundant comms</label>
+        </div>
       `;
       container.appendChild(card);
     });
     // Bind events
     container.querySelectorAll('.phase-name').forEach((inp) => inp.addEventListener('input', onPhaseNameChange));
-    container.querySelectorAll('textarea, input, select').forEach((el) => el.addEventListener('input', onPhaseFieldChange));
+    container.querySelectorAll('textarea, input, select').forEach((el) => {
+      const evt = el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(evt, onPhaseFieldChange);
+    });
     container.querySelectorAll('[data-move]').forEach((btn) => btn.addEventListener('click', onPhaseMove));
     container.querySelectorAll('[data-delete]').forEach((btn) => btn.addEventListener('click', onPhaseDelete));
   }
@@ -875,7 +972,9 @@
   function renderConstraints() {
     document.getElementById('constraintTime').value = currentMission.constraints.timeWindow || '';
     document.getElementById('constraintEnvironment').value = currentMission.constraints.environment || '';
+    document.getElementById('constraintCuas').value = currentMission.constraints.expectedCuasThreat || '';
     document.getElementById('constraintRf').value = currentMission.constraints.rfConstraints || '';
+    document.getElementById('constraintEw').value = currentMission.constraints.ewThreatSummary || '';
     document.getElementById('constraintLogistics').value = currentMission.constraints.logisticsConstraints || '';
     document.getElementById('constraintSorties').value =
       currentMission.constraints.maxSorties !== null && currentMission.constraints.maxSorties !== undefined
@@ -1104,27 +1203,81 @@
           <tbody>${rows || '<tr><td colspan="5">No platforms loaded</td></tr>'}</tbody>
         </table>
       </div>
+      <div class="phase-risk-table">
+        <h4>Phase comms/mesh risk</h4>
+        <table>
+          <thead><tr><th>Phase</th><th>Flags</th><th>Risk</th><th>Notes</th></tr></thead>
+          <tbody>
+            ${
+              currentMission.phases
+                .map((phase) => {
+                  const risk = computePhaseRisk(phase);
+                  const flags = [
+                    phase.requiresMeshCoverage ? 'Mesh required' : null,
+                    phase.requiresRedundantComms ? 'Redundant comms' : null
+                  ]
+                    .filter(Boolean)
+                    .join(' • ');
+                  return `<tr class="risk-${risk.level}"><td>${phase.name}</td><td>${flags || 'None set'}</td><td>${risk.label}</td><td>${risk.reason}</td></tr>`;
+                })
+                .join('') || '<tr><td colspan="4">No phases loaded</td></tr>'
+            }
+          </tbody>
+        </table>
+      </div>
     `;
+  }
+
+  function computePhaseRisk(phase) {
+    const meshLinks = currentMission.imports?.mesh?.links || project.mesh_links || [];
+    const requiresMesh = Boolean(phase.requiresMeshCoverage);
+    const requiresRedundant = Boolean(phase.requiresRedundantComms);
+    const hasMesh = meshLinks.length > 0;
+    const redundancy = hasRedundantPaths(meshLinks);
+    const duration = Number(currentMission.missionMeta?.durationHours || 0);
+    const enduranceRisk = (phase.assetsUsed || []).some((id) => {
+      const asset = currentMission.assets.find((a) => a.id === id && (a.type === 'UXS' || a.type === 'PLATFORM'));
+      if (!asset) return false;
+      const endurance = getAssetEnduranceHours(asset);
+      return endurance && duration > endurance * 2;
+    });
+
+    if (requiresMesh && !hasMesh) return { level: 'red', label: 'High risk', reason: 'Mesh coverage required but no mesh plan loaded.' };
+    if (requiresRedundant && !redundancy) return { level: 'yellow', label: 'Medium risk', reason: 'Redundant comms requested but mesh depth is limited.' };
+    if (enduranceRisk) return { level: 'yellow', label: 'Medium risk', reason: 'Platform endurance is thin for mission duration.' };
+    return { level: 'green', label: 'Low risk', reason: requiresMesh || requiresRedundant ? 'Mesh plan aligns with requirements.' : 'No comms dependencies flagged.' };
+  }
+
+  function hasRedundantPaths(links = []) {
+    const degree = {};
+    links.forEach((l) => {
+      if (!l) return;
+      degree[l.from] = (degree[l.from] || 0) + 1;
+      degree[l.to] = (degree[l.to] || 0) + 1;
+    });
+    return Object.values(degree).some((d) => d > 1);
   }
 
   /** Event handlers **/
   function bindEvents() {
-    document.getElementById('loadExampleBtn').addEventListener('click', createExampleMission);
+    const demoBtn = document.getElementById('loadExampleBtn');
+    if (demoBtn) demoBtn.addEventListener('click', () => loadDemoMission());
     document.getElementById('newMissionBtn').addEventListener('click', createNewMission);
     document.getElementById('saveMissionBtn').addEventListener('click', saveCurrentMission);
     document.getElementById('deleteMissionBtn').addEventListener('click', deleteCurrentMission);
-    document.getElementById('importMissionProjectBtn').addEventListener('click', () =>
-      document.getElementById('missionProjectFile').click()
-    );
-    document.getElementById('missionProjectFile').addEventListener('change', downloadMissionProjectFromFile);
     document.getElementById('loadMissionBtn').addEventListener('click', toggleSavedList);
     document.getElementById('addPhaseBtn').addEventListener('click', addPhase);
     document.getElementById('addAssetBtn').addEventListener('click', addAssetPrompt);
     document.getElementById('seedAssetsBtn').addEventListener('click', seedAssets);
     document.getElementById('addAssignmentBtn').addEventListener('click', addAssignment);
-    document.getElementById('importNodeBtn').addEventListener('click', () => triggerImport('node'));
-    document.getElementById('importPlatformBtn').addEventListener('click', () => triggerImport('platform'));
-    document.getElementById('importMeshBtn').addEventListener('click', () => triggerImport('mesh'));
+    const importFileBtn = document.getElementById('importFileBtn');
+    const unifiedFile = document.getElementById('unifiedImportFile');
+    if (importFileBtn && unifiedFile) importFileBtn.addEventListener('click', () => unifiedFile.click());
+    if (unifiedFile) unifiedFile.addEventListener('change', onUnifiedFileSelect);
+    const parseBtn = document.getElementById('parseImportBtn');
+    if (parseBtn) parseBtn.addEventListener('click', parseUnifiedImportInput);
+    const applyBtn = document.getElementById('applyImportBtn');
+    if (applyBtn) applyBtn.addEventListener('click', applyPendingImport);
     document.getElementById('exportOverlayBtn').addEventListener('click', downloadMissionOverlay);
     document.getElementById('printBtn').addEventListener('click', () => window.print());
     const printCardsBtn = document.getElementById('printCardsBtn');
@@ -1132,7 +1285,10 @@
     document.getElementById('downloadJsonBtn').addEventListener('click', downloadMissionJson);
 
     document.getElementById('missionName').addEventListener('input', (e) => updateMetaField('name', e.target.value));
-    document.getElementById('missionPreset').addEventListener('change', (e) => applyMissionPreset(e.target.value));
+    document.getElementById('missionPreset').addEventListener('change', (e) => {
+      applyPreset(e.target.value);
+      renderPresetHelper(e.target.value);
+    });
     document.getElementById('missionType').addEventListener('input', (e) => updateMetaField('missionType', e.target.value));
     document.getElementById('missionAo').addEventListener('input', (e) => updateMetaField('ao', e.target.value));
     document.getElementById('missionUnit').addEventListener('input', (e) => updateMetaField('unitOrDetachment', e.target.value));
@@ -1155,7 +1311,9 @@
 
     document.getElementById('constraintTime').addEventListener('input', (e) => updateConstraint('timeWindow', e.target.value));
     document.getElementById('constraintEnvironment').addEventListener('input', (e) => updateConstraint('environment', e.target.value));
+    document.getElementById('constraintCuas').addEventListener('change', (e) => updateConstraint('expectedCuasThreat', e.target.value));
     document.getElementById('constraintRf').addEventListener('input', (e) => updateConstraint('rfConstraints', e.target.value));
+    document.getElementById('constraintEw').addEventListener('input', (e) => updateConstraint('ewThreatSummary', e.target.value));
     document.getElementById('constraintLogistics').addEventListener('input', (e) => updateConstraint('logisticsConstraints', e.target.value));
     document.getElementById('constraintSorties').addEventListener('input', (e) =>
       updateConstraint('maxSorties', e.target.value ? Number(e.target.value) : null)
@@ -1194,9 +1352,10 @@
       const options = Array.from(e.target.selectedOptions).map((o) => o.value);
       phase.assetsUsed = options;
     } else {
-      phase[field] = e.target.value;
+      phase[field] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     }
     renderBrief();
+    renderFeasibility();
     renderAssignmentMatrix();
     persistProject();
   }
@@ -1404,6 +1563,7 @@
   function updateConstraint(field, value) {
     currentMission.constraints[field] = value;
     renderBrief();
+    renderFeasibility();
     persistProject();
   }
 
@@ -1614,21 +1774,106 @@
     a.click();
   }
 
-  function downloadMissionProjectFromFile(event) {
+  function onUnifiedFileSelect(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        importMissionProject(data);
-        showBanner('MissionProject imported successfully.', 'info');
+        setPendingImport(data, `File: ${file.name}`);
       } catch (err) {
         console.error(err);
-        showBanner('Invalid MissionProject JSON.', 'danger');
+        showBanner('Invalid JSON payload.', 'danger');
       }
     };
     reader.readAsText(file);
+  }
+
+  function parseUnifiedImportInput() {
+    const textarea = document.getElementById('unifiedImportInput');
+    if (!textarea) return;
+    const text = textarea.value.trim();
+    if (!text) {
+      showBanner('Paste JSON to import.', 'danger');
+      return;
+    }
+    try {
+      const data = JSON.parse(text);
+      setPendingImport(data, 'Pasted payload');
+    } catch (err) {
+      console.error(err);
+      showBanner('Invalid JSON.', 'danger');
+    }
+  }
+
+  function summarizeImport(data) {
+    const safeData = typeof data === 'object' && data !== null ? data : {};
+    const sections = extractMissionProjectSections(safeData);
+    const isMissionProject = safeData?.schema === 'MissionProject' || safeData?.schemaVersion || safeData?.mission;
+    const schemaVersion = safeData?.schemaVersion || safeData?.version || 'unknown';
+    let type = 'module';
+    if (isMissionProject) type = 'mission-project';
+    else if (sections.mesh_links?.length) type = 'mesh';
+    else if (sections.platforms?.length) type = 'uxs';
+    else if (sections.nodes?.length) type = 'node';
+    else if (sections.kits?.length) type = 'kit';
+    const unknownKeys = Object.keys(safeData).filter(
+      (k) => !['schema', 'schemaVersion', 'mission', 'nodes', 'platforms', 'mesh_links', 'kits', 'imports', 'mesh'].includes(k)
+    );
+    return { type, schemaVersion, sections, unknownKeys };
+  }
+
+  function renderImportPreview() {
+    const container = document.getElementById('importPreview');
+    if (!container) return;
+    if (!pendingImport) {
+      container.textContent = 'No payload detected yet.';
+      return;
+    }
+    const expectedSchema = typeof MISSIONPROJECT_SCHEMA_VERSION !== 'undefined' ? MISSIONPROJECT_SCHEMA_VERSION : '2.0.0';
+    const { summary, label } = pendingImport;
+    const counts = summary.sections;
+    const schemaWarning = summary.schemaVersion !== 'unknown' && summary.schemaVersion !== expectedSchema;
+    container.innerHTML = `
+      <div><strong>Source:</strong> ${label}</div>
+      <div><strong>Detected type:</strong> ${summary.type}</div>
+      <div><strong>schemaVersion:</strong> ${summary.schemaVersion} (expected ${expectedSchema}) ${
+      schemaWarning ? '<span class="pill danger">Mismatch</span>' : ''
+    }</div>
+      <ul>
+        <li>nodes: ${counts.nodes.length}</li>
+        <li>platforms: ${counts.platforms.length}</li>
+        <li>mesh_links: ${counts.mesh_links.length}</li>
+        <li>kits: ${counts.kits.length}</li>
+      </ul>
+      ${summary.unknownKeys.length ? `<div class="muted">Preserving unknown keys: ${summary.unknownKeys.join(', ')}</div>` : ''}
+    `;
+  }
+
+  function setPendingImport(data, label = 'Import payload') {
+    const summary = summarizeImport(data);
+    pendingImport = { data, summary, label };
+    renderImportPreview();
+  }
+
+  function applyPendingImport() {
+    if (!pendingImport) {
+      showBanner('No parsed payload to import.', 'danger');
+      return;
+    }
+    const { data, summary } = pendingImport;
+    if (summary.type === 'mission-project') {
+      if (!window.confirm('Replace current MissionProject with imported payload?')) return;
+      importMissionProject(data);
+      showBanner('MissionProject replaced from import.', 'info');
+    } else {
+      const normalized = normalizeSectionsForProject(summary.sections);
+      mergeProjectEntities(normalized);
+      showBanner('Modules merged into current mission.', 'info');
+    }
+    renderAll();
+    persistProject();
   }
 
   function importMissionProject(data) {
@@ -1939,6 +2184,7 @@
     if (!currentMission) createNewMission();
     renderAll();
     bindEvents();
+    renderImportPreview();
     const hash = window.location.hash.replace('#', '');
     if (hash) switchPanel(hash);
   }
@@ -1969,13 +2215,25 @@
         maxSorties: null,
         minBatteryReserve: null,
         requireRfCoverage: false,
+        expectedCuasThreat: '',
+        ewThreatSummary: '',
         successCriteria: [],
         riskNotes: ''
       };
     }
+    m.phases = (m.phases || []).map((phase) => ({
+      ...phase,
+      requiresMeshCoverage: Boolean(phase.requiresMeshCoverage),
+      requiresRedundantComms: Boolean(phase.requiresRedundantComms)
+    }));
     if (!m.assignments) m.assignments = [];
     if (!m.imports) m.imports = { nodes: [], platforms: [], mesh: null };
     return m;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.loadDemoMission = loadDemoMission;
+    window.applyPreset = applyPreset;
   }
 
   document.addEventListener('DOMContentLoaded', init);
