@@ -11,11 +11,11 @@
   <div id="access-gate" class="access-overlay" style="display: none;">
     <div class="gate-card">
       <h1>Ceradon Mission Architect</h1>
-      <p class="gate-subtitle">Ceradon Mission Architect demo access. Enter the issued code to continue.</p>
+      <p class="gate-subtitle">Enter the access code provided by Ceradon Systems.</p>
       <label for="demo-code">Access code</label>
-      <input id="demo-code" type="password" autocomplete="off" placeholder="Enter access code">
+      <input id="demo-code" type="password" autocomplete="off" placeholder="Access code">
       <button id="demo-enter" class="primary-btn">Enter</button>
-      <div id="demo-error" class="error-message">Invalid code.</div>
+      <div id="demo-error" class="error-message" style="display:none;">Invalid code.</div>
     </div>
 
     <section id="demo-request" class="demo-request">
@@ -69,12 +69,12 @@
       <section id="setup" class="panel active">
         <h2>Mission Setup</h2>
         <div class="preset-row">
-          <label class="preset-label">Mission preset
+            <label class="preset-label">Mission preset
             <select id="missionPreset">
               <option value="">Select a doctrinal preset…</option>
-              <option value="cold-weather">Cold-weather ridge mesh recon</option>
-              <option value="urban-ew">Urban mesh lane in EW environment</option>
-              <option value="partner-uxs">Partner-force sustainment &amp; UxS support</option>
+              <option value="cold-weather" data-desc="Ridge recon with mesh relays, 24-36h, alpine bands, mesh-heavy" title="Ridge recon with mesh relays, 24-36h, alpine bands, mesh-heavy">Cold-weather ridge mesh recon</option>
+              <option value="urban-ew" data-desc="Urban lane in contested EW, 18-24h, dense structures, C-UAS aware" title="Urban lane in contested EW, 18-24h, dense structures, C-UAS aware">Urban mesh lane in EW environment</option>
+              <option value="partner-uxs" data-desc="Partner sustainment with UxS telemetry, 36-48h, mixed terrain" title="Partner sustainment with UxS telemetry, 36-48h, mixed terrain">Partner-force sustainment &amp; UxS support</option>
             </select>
           </label>
           <div id="presetHelper" class="preset-helper">Applies mission type, duration, environment bands, and phase framing.</div>
@@ -121,37 +121,26 @@
             <div id="savedMissionsList" class="dropdown-content"></div>
           </div>
           <button id="deleteMissionBtn" class="danger-btn">Delete Mission</button>
-          <button id="importMissionProjectBtn" class="secondary-btn">Import MissionProject JSON</button>
-          <input type="file" id="missionProjectFile" accept="application/json" style="display:none" />
         </div>
 
-        <details class="integrations">
-          <summary>Advanced import helpers</summary>
-          <p class="muted helper-text">Paste JSON from other Architect tools when you want to merge Nodes, UxS platforms, Mesh links, or KitSmith kits into the current MissionProject. Use full MissionProject imports when you need the entire mission and constraints bundle. Unknown keys are preserved and exported, and schemaVersion is respected when round-tripping.</p>
-          <div class="grid two-col">
-            <div>
-              <label>Paste Node Architect JSON (updates nodes)<textarea id="nodeJson"></textarea></label>
-              <button data-parse="node" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-            </div>
-            <div>
-              <label>Paste UxS Architect JSON (updates platforms)<textarea id="uxsJson"></textarea></label>
-              <button data-parse="uxs" class="secondary-btn parse-btn">Parse &amp; Add Assets</button>
-            </div>
-            <div>
-              <label>Paste Mesh Architect JSON (updates mesh_links)<textarea id="meshJson"></textarea></label>
-              <button data-parse="mesh" class="secondary-btn parse-btn">Parse &amp; Add Links</button>
-            </div>
-            <div>
-              <label>Paste KitSmith JSON (updates kits)<textarea id="kitJson"></textarea></label>
-              <button data-parse="kit" class="secondary-btn parse-btn">Parse &amp; Add Kits</button>
-            </div>
+        <section class="import-panel">
+          <div class="panel-header">
+            <h3>MissionProject &amp; module import</h3>
+            <div class="muted">Upload or paste JSON from Mission Architect, Node Architect, UxS Architect, Mesh Architect, or KitSmith.</div>
           </div>
+          <div class="import-actions">
+            <button id="importFileBtn" class="secondary-btn" type="button">Upload JSON file</button>
+            <input type="file" id="unifiedImportFile" accept="application/json" style="display:none" />
+            <button id="parseImportBtn" class="primary-btn" type="button">Parse &amp; preview</button>
+          </div>
+          <label>Paste JSON payload
+            <textarea id="unifiedImportInput" placeholder="Paste MissionProject or module JSON here"></textarea>
+          </label>
+          <div id="importPreview" class="import-preview muted">No payload detected yet.</div>
           <div class="button-row">
-            <button id="importNodeBtn" type="button" class="secondary-btn">Import Node Designs</button>
-            <button id="importPlatformBtn" type="button" class="secondary-btn">Import Platform Designs</button>
-            <button id="importMeshBtn" type="button" class="secondary-btn">Import Mesh JSON</button>
+            <button id="applyImportBtn" class="primary-btn" type="button">Apply import</button>
           </div>
-        </details>
+        </section>
       </section>
 
       <section id="phases" class="panel">
@@ -189,7 +178,16 @@
         <div class="grid two-col">
           <label>Time Window<input id="constraintTime" type="text"></label>
           <label>Environment<input id="constraintEnvironment" type="text"></label>
+          <label>Expected C-UAS threat level
+            <select id="constraintCuas">
+              <option value="">Not assessed</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </label>
           <label>RF / EW Constraints<textarea id="constraintRf"></textarea></label>
+          <label>EW threat summary<textarea id="constraintEw"></textarea></label>
           <label>Logistics Constraints<textarea id="constraintLogistics"></textarea></label>
           <label>Max Sorties<input id="constraintSorties" type="number" min="0" placeholder="e.g., 6"></label>
           <label>Min Battery Reserve (%)<input id="constraintReserve" type="number" min="0" max="100" step="5"></label>
@@ -245,13 +243,13 @@
     <footer class="app-footer">
       <div id="footerVersion"></div>
     </footer>
-    <div id="demoAccessBanner" class="demo-access" style="display:none;">Demo access: MISSION-ORB-593</div>
   </div>
 
   <script src="app.js"></script>
   <script>
-    const ACCESS_CODE = "MISSION-ORB-593";
-    const STORAGE_KEY = "ceradon_demo_code";
+    const DEMO_ACCESS_CODE = "MISSION-ORB-593";
+    const STORAGE_KEY = "mission_architect_access_granted";
+    let failedAttempts = 0;
 
     document.addEventListener("DOMContentLoaded", () => {
       const gate = document.getElementById("access-gate");
@@ -259,21 +257,14 @@
       const input = document.getElementById("demo-code");
       const button = document.getElementById("demo-enter");
       const errorEl = document.getElementById("demo-error");
-      const demoBanner = document.getElementById("demoAccessBanner");
 
       if (!gate || !app || !input || !button || !errorEl) return;
-
-      const legacyFlag = localStorage.getItem("ceradonDemoAuthorized") === "true";
-      if (legacyFlag && !localStorage.getItem(STORAGE_KEY)) {
-        localStorage.setItem(STORAGE_KEY, ACCESS_CODE);
-      }
 
       const lockUi = () => {
         gate.style.display = "flex";
         app.style.display = "block";
         document.body.classList.add("app-locked");
         errorEl.style.display = "none";
-        if (demoBanner) demoBanner.style.display = "none";
       };
 
       const unlock = () => {
@@ -281,29 +272,28 @@
         app.style.display = "block";
         document.body.classList.remove("app-locked");
         errorEl.style.display = "none";
-        if (demoBanner) demoBanner.style.display = "block";
+        failedAttempts = 0;
+        if (!localStorage.getItem(STORAGE_KEY)) {
+          localStorage.setItem(STORAGE_KEY, "true");
+          if (window.loadDemoMission) window.loadDemoMission();
+        }
       };
 
-      const storedCode = localStorage.getItem(STORAGE_KEY);
-
-      if (storedCode === ACCESS_CODE) {
+      const accessGranted = localStorage.getItem(STORAGE_KEY) === "true";
+      if (accessGranted) {
         unlock();
         return;
-      }
-
-      if (storedCode) {
-        input.value = storedCode;
       }
 
       lockUi();
 
       const checkCode = () => {
         const value = input.value.trim();
-        if (value === ACCESS_CODE) {
-          localStorage.setItem(STORAGE_KEY, ACCESS_CODE);
+        if (value === DEMO_ACCESS_CODE) {
           unlock();
         } else {
-          errorEl.style.display = "block";
+          failedAttempts += 1;
+          if (failedAttempts > 0) errorEl.style.display = "block";
         }
       };
 

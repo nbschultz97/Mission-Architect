@@ -1,0 +1,105 @@
+{
+  "schema": "MissionProject",
+  "schemaVersion": "2.0.0",
+  "origin_tool": "mission",
+  "meta": {
+    "name": "WHITEFROST Ridge Patrol",
+    "durationHours": 36,
+    "altitudeBand": "High",
+    "temperatureBand": "Cold",
+    "lastUpdated": "2024-09-01",
+    "savedMissions": [],
+    "origin_tool": "mission"
+  },
+  "mission": {
+    "id": "whitefrost-demo",
+    "origin_tool": "mission",
+    "missionMeta": {
+      "name": "WHITEFROST Ridge Patrol",
+      "classificationBanner": "UNCLASSIFIED // TRAINING USE",
+      "ao": "WHITEFROST ridge complex",
+      "unitOrDetachment": "Cold cell",
+      "createdOn": "2024-09-01",
+      "createdBy": "Ceradon Mission Architect",
+      "missionType": "Recon",
+      "durationHours": 36,
+      "altitudeBand": "High",
+      "temperatureBand": "Cold",
+      "presetKey": "cold-weather"
+    },
+    "phases": [
+      {
+        "id": "STAGE",
+        "name": "Staging",
+        "description": "Prep cold-weather kits, test mesh relays, validate PACE.",
+        "tasks": ["Pre-stage caches", "Spin up mesh relays", "Brief cold comms"],
+        "assetsUsed": [],
+        "requiresMeshCoverage": true,
+        "requiresRedundantComms": false
+      },
+      {
+        "id": "INFIL",
+        "name": "Ridge ingress",
+        "description": "Move along ridge line and post relays at known LOS gaps.",
+        "tasks": ["Place mast relay", "Confirm valley downlink", "Log CSI in shadow"],
+        "assetsUsed": [],
+        "requiresMeshCoverage": true,
+        "requiresRedundantComms": true
+      },
+      {
+        "id": "ON_STATION",
+        "name": "Overwatch",
+        "description": "Hold overwatch and capture CSI for pose research lanes.",
+        "tasks": ["Log telemetry", "Validate redundant comms", "Record sustainment pulls"],
+        "assetsUsed": [],
+        "requiresMeshCoverage": true,
+        "requiresRedundantComms": true
+      },
+      {
+        "id": "EXFIL",
+        "name": "Recovery",
+        "description": "Recover kits and close out ridge patrol.",
+        "tasks": ["Recover relays", "Secure data", "Capture sustainment lessons"],
+        "assetsUsed": [],
+        "requiresMeshCoverage": false,
+        "requiresRedundantComms": false
+      }
+    ],
+    "assets": [],
+    "assignments": [],
+    "imports": {
+      "nodes": [],
+      "platforms": [],
+      "mesh": { "links": [] },
+      "kits": []
+    },
+    "constraints": {
+      "timeWindow": "H+0 to H+36",
+      "environment": "Cold, ridge-line winds, icing risk",
+      "rfConstraints": "LOS breaks across saddles; mast relays preferred",
+      "logisticsConstraints": "Battery warmers required; cache at ingress",
+      "maxSorties": 4,
+      "minBatteryReserve": 25,
+      "requireRfCoverage": true,
+      "expectedCuasThreat": "Medium",
+      "ewThreatSummary": "Light jamming risk from valley floor",
+      "successCriteria": [
+        "Maintain ridge mesh with two hops",
+        "Collect CSI traces for pose estimation trials"
+      ],
+      "riskNotes": "Ice and wind on ridge; secure mast guy lines"
+    }
+  },
+  "nodes": [],
+  "platforms": [],
+  "mesh_links": [],
+  "kits": [],
+  "environment": {
+    "ao": "WHITEFROST ridge complex",
+    "altitudeBand": "High",
+    "temperatureBand": "Cold",
+    "weather": "Cold, ridge-line winds, icing risk",
+    "logisticsNotes": "Caches at ingress/egress"
+  },
+  "constraints": []
+}
