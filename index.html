@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
   <body>
-  <div id="access-gate" style="display: none;">
+  <div id="access-gate" class="access-overlay" style="display: none;">
     <div class="gate-card">
       <h1>Ceradon Mission Architect</h1>
       <p class="gate-subtitle">Ceradon Mission Architect demo access. Enter the issued code to continue.</p>
@@ -45,7 +45,7 @@
     </section>
   </div>
 
-  <div id="app-root" style="display: none;">
+  <div id="app-root">
     <div id="statusBanner" class="status-banner" style="display:none;"></div>
     <header class="top-nav">
       <div class="branding">
@@ -53,6 +53,7 @@
         <div class="subtitle">Mission-level planner for Ceradon Architect Stack</div>
       </div>
       <div class="version-chip" id="headerVersion"></div>
+      <div class="schema-chip" id="schemaBadge"></div>
       <nav class="nav-tabs">
         <button class="nav-btn" data-target="setup">1) Mission Setup</button>
         <button class="nav-btn" data-target="phases">2) Phases</button>
@@ -67,6 +68,17 @@
     <main>
       <section id="setup" class="panel active">
         <h2>Mission Setup</h2>
+        <div class="preset-row">
+          <label class="preset-label">Mission preset
+            <select id="missionPreset">
+              <option value="">Select a doctrinal preset…</option>
+              <option value="cold-weather">Cold-weather ridge mesh recon</option>
+              <option value="urban-ew">Urban mesh lane in EW environment</option>
+              <option value="partner-uxs">Partner-force sustainment &amp; UxS support</option>
+            </select>
+          </label>
+          <div id="presetHelper" class="preset-helper">Applies mission type, duration, environment bands, and phase framing.</div>
+        </div>
         <div class="grid two-col">
           <label>Mission Name<input id="missionName" type="text" placeholder="Mission name"></label>
           <label>Mission Type
@@ -233,6 +245,7 @@
     <footer class="app-footer">
       <div id="footerVersion"></div>
     </footer>
+    <div id="demoAccessBanner" class="demo-access" style="display:none;">Demo access: MISSION-ORB-593</div>
   </div>
 
   <script src="app.js"></script>
@@ -246,6 +259,7 @@
       const input = document.getElementById("demo-code");
       const button = document.getElementById("demo-enter");
       const errorEl = document.getElementById("demo-error");
+      const demoBanner = document.getElementById("demoAccessBanner");
 
       if (!gate || !app || !input || !button || !errorEl) return;
 
@@ -254,9 +268,20 @@
         localStorage.setItem(STORAGE_KEY, ACCESS_CODE);
       }
 
+      const lockUi = () => {
+        gate.style.display = "flex";
+        app.style.display = "block";
+        document.body.classList.add("app-locked");
+        errorEl.style.display = "none";
+        if (demoBanner) demoBanner.style.display = "none";
+      };
+
       const unlock = () => {
         gate.style.display = "none";
         app.style.display = "block";
+        document.body.classList.remove("app-locked");
+        errorEl.style.display = "none";
+        if (demoBanner) demoBanner.style.display = "block";
       };
 
       const storedCode = localStorage.getItem(STORAGE_KEY);
@@ -270,8 +295,7 @@
         input.value = storedCode;
       }
 
-      gate.style.display = "flex";
-      app.style.display = "none";
+      lockUi();
 
       const checkCode = () => {
         const value = input.value.trim();

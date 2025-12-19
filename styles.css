@@ -29,6 +29,14 @@ body {
   padding: 20px;
 }
 
+.access-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 13, 17, 0.9);
+  z-index: 30;
+  overflow-y: auto;
+}
+
 .gate-card {
   width: min(520px, 100%);
   background: var(--panel);
@@ -150,6 +158,17 @@ a { color: var(--accent); }
   flex-shrink: 0;
 }
 
+.schema-chip {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: #0d1a22;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.schema-chip.warn { border-color: var(--danger); color: var(--danger); background: #261418; }
+
 details summary { cursor: pointer; font-weight: 600; }
 
 details {
@@ -193,6 +212,24 @@ textarea { min-height: 90px; resize: vertical; }
 .inline-input { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .inline-input input { flex: 1; min-width: 120px; }
 
+.preset-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.preset-label {
+  flex: 1;
+  min-width: 220px;
+}
+
+.preset-helper {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .dropdown { position: relative; }
 .dropdown-content {
   display: none;
@@ -233,6 +270,20 @@ textarea { min-height: 90px; resize: vertical; }
 }
 .asset-table th { color: var(--muted); background: #0d191f; }
 .asset-actions { display: flex; gap: 8px; }
+.asset-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.origin-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #0e1c22;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
 
 .matrix { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
 .matrix table { width: 100%; border-collapse: collapse; }
@@ -320,6 +371,28 @@ textarea { min-height: 90px; resize: vertical; }
   color: var(--muted);
   text-align: center;
   font-size: 0.95rem;
+}
+
+.demo-access {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  background: #103223;
+  border: 1px solid var(--accent);
+  color: #c7f7e4;
+  padding: 8px 12px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-weight: 600;
+  z-index: 25;
+}
+
+.app-locked main,
+.app-locked header,
+.app-locked footer {
+  filter: blur(2px);
+  pointer-events: none;
+  user-select: none;
 }
 
 @media (max-width: 768px) {
