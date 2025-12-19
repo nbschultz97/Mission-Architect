@@ -3,6 +3,7 @@
   let project = null;
   let currentMission = null;
   let bannerTimeout = null;
+  let lastSchemaWarning = null;
 
   const altitudeBands = ['Surface', 'Low', 'Medium', 'High', 'Stratospheric'];
   const temperatureBands = ['Cold', 'Temperate', 'Hot', 'Extreme'];
@@ -34,6 +35,72 @@
     { id: 'EXFIL', name: 'Exfil', description: 'Recover and depart', tasks: [], assetsUsed: [] }
   ];
 
+  const missionPresets = {
+    'cold-weather': {
+      label: 'Cold-weather ridge mesh recon',
+      meta: {
+        missionType: 'Recon',
+        durationHours: 36,
+        altitudeBand: 'High',
+        temperatureBand: 'Cold',
+        ao: 'Ridge line and valley approaches'
+      },
+      constraints: {
+        environment: 'Cold weather, icing risk, terrain masking',
+        rfConstraints: 'Line-of-sight breaks across ridges; plan for mast or relay',
+        logisticsConstraints: 'Battery warming required; cache at ridge access points'
+      },
+      phases: [
+        { name: 'Cold soak prep', description: 'Pre-stage kits and cold weather checks.', tasks: ['Warm batteries', 'Ice-proof sensors'] },
+        { name: 'Ridge recon', description: 'Move along ridge to map LOS mesh lanes.', tasks: ['Relay placement', 'Capture ridge mesh logs'] },
+        { name: 'Valley overwatch', description: 'Hold overwatch positions and log crossings.', tasks: ['Record CSI for ridge shadow zones'] },
+        { name: 'Recovery and thaw', description: 'Recover nodes and thaw gear.', tasks: ['Document power loss or icing']} 
+      ]
+    },
+    'urban-ew': {
+      label: 'Urban mesh lane in EW environment',
+      meta: {
+        missionType: 'Mesh Lane',
+        durationHours: 24,
+        altitudeBand: 'Low',
+        temperatureBand: 'Temperate',
+        ao: 'Dense urban core with contested spectrum'
+      },
+      constraints: {
+        environment: 'Urban canyon multi-path; EW activity expected',
+        rfConstraints: 'Avoid known jamming sectors; prefer frequency agility',
+        logisticsConstraints: 'Mobile sustainment; quick cable drops for power'
+      },
+      phases: [
+        { name: 'Urban staging', description: 'Brief, split teams, and test frequency plans.', tasks: ['Select primary/alt mesh lane', 'Prep EW monitor nodes'] },
+        { name: 'Lane establishment', description: 'Place relays and validate throughput.', tasks: ['Deploy rooftop relays', 'Capture CSI in contested alleys'] },
+        { name: 'EW monitoring', description: 'Monitor and adapt to interference.', tasks: ['Rotate channels', 'Log jamming detections'] },
+        { name: 'Sweep and recover', description: 'Recover gear and summarize interference map.', tasks: ['Collect nodes', 'Export EW lane summary'] }
+      ]
+    },
+    'partner-uxs': {
+      label: 'Partner-force sustainment & UxS support',
+      meta: {
+        missionType: 'Resupply',
+        durationHours: 48,
+        altitudeBand: 'Medium',
+        temperatureBand: 'Temperate',
+        ao: 'Partner-held valley with UxS lanes'
+      },
+      constraints: {
+        environment: 'Partner sustainment focus with UxS tasking windows',
+        rfConstraints: 'Protect partner comms; coordinate mesh for UxS telemetry',
+        logisticsConstraints: 'Cache rotations every 6 hrs; partner-led sustainment'
+      },
+      phases: [
+        { name: 'Partner link-up', description: 'Align on sustainment and mesh tasks.', tasks: ['Confirm partner PACE', 'Share mesh lane overlays'] },
+        { name: 'UxS support window', description: 'Fly or task UxS under partner overwatch.', tasks: ['Validate telemetry links', 'Record UxS CSI traces'] },
+        { name: 'Cache rotation', description: 'Refresh batteries and redistribute kits.', tasks: ['Deliver kits to partner cache', 'Swap UxS payloads'] },
+        { name: 'Retrograde', description: 'Recover partner loaned gear and export logs.', tasks: ['Harden export bundle', 'Capture sustainment lessons']} 
+      ]
+    }
+  };
+
   function showBanner(message, tone = 'info') {
     const banner = document.getElementById('statusBanner');
     if (!banner) return;
@@ -49,6 +116,11 @@
   /** Utility **/
   const uuid = () => 'id-' + Math.random().toString(36).substring(2, 9);
   const findMissionIndex = (id) => (project.meta.savedMissions || []).findIndex((m) => m.id === id);
+  const ensureOriginTool = (asset, fallback = 'mission') => ({
+    ...asset,
+    origin_tool: asset.origin_tool || asset.sourceTool || fallback,
+    sourceTool: asset.sourceTool || asset.origin_tool || fallback
+  });
 
   function validateMission(target = currentMission) {
     if (!target) return { ok: false, errors: ['Mission not initialized'] };
@@ -245,6 +317,37 @@
     renderAll();
     persistProject();
     showBanner('Loaded demo mission with generic elements.', 'info');
+  }
+
+  function applyMissionPreset(key) {
+    const preset = missionPresets[key];
+    if (!preset) return;
+    const meta = currentMission.missionMeta || {};
+    currentMission.missionMeta = {
+      ...meta,
+      ...preset.meta,
+      presetKey: key
+    };
+    currentMission.constraints = {
+      ...currentMission.constraints,
+      ...(preset.constraints || {})
+    };
+    currentMission.phases = (preset.phases || []).map((phase) => ({
+      id: uuid(),
+      name: phase.name,
+      description: phase.description || '',
+      tasks: [...(phase.tasks || [])],
+      assetsUsed: [],
+      startCondition: phase.startCondition || '',
+      endCondition: phase.endCondition || '',
+      emconConsiderations: phase.emconConsiderations || ''
+    }));
+    renderSetup();
+    renderPhases();
+    renderBrief();
+    renderAssignmentMatrix();
+    persistProject();
+    showBanner(`Preset applied: ${preset.label}`, 'info');
   }
 
   function getDemoAssets() {
@@ -479,6 +582,7 @@
   /** Rendering **/
   function renderAll() {
     if (!currentMission) return;
+    currentMission.assets = (currentMission.assets || []).map((a) => ensureOriginTool(a));
     renderVersionMeta();
     renderNav();
     renderSetup();
@@ -499,11 +603,21 @@
       : typeof MISSION_PROJECT_SCHEMA_VERSION !== 'undefined'
       ? MISSION_PROJECT_SCHEMA_VERSION
       : '2.0.0';
+    const loadedSchema = project?.schemaVersion || schemaVersion;
     const versionText = `${APP_VERSION || 'Mission Architect'} • MissionProject schema v${schemaVersion}`;
     const header = document.getElementById('headerVersion');
     const footer = document.getElementById('footerVersion');
+    const badge = document.getElementById('schemaBadge');
     if (header) header.textContent = versionText;
     if (footer) footer.textContent = versionText;
+    if (badge) {
+      badge.textContent = `Loaded schema v${loadedSchema}`;
+      badge.classList.toggle('warn', loadedSchema !== schemaVersion);
+    }
+    if (loadedSchema !== schemaVersion && lastSchemaWarning !== loadedSchema) {
+      lastSchemaWarning = loadedSchema;
+      showBanner(`Loaded MissionProject schema v${loadedSchema}; upgrade to v${schemaVersion} in the Architect hub when ready.`, 'danger');
+    }
   }
 
   function renderChangeLog() {
@@ -561,6 +675,8 @@
     document.getElementById('missionDuration').value = meta.durationHours || 0;
     document.getElementById('missionAltitude').value = meta.altitudeBand || 'Surface';
     document.getElementById('missionTemperature').value = meta.temperatureBand || 'Temperate';
+    const presetSelect = document.getElementById('missionPreset');
+    if (presetSelect) presetSelect.value = meta.presetKey || '';
   }
 
   function renderPhases() {
@@ -619,14 +735,14 @@
       return;
     }
     const rows = currentMission.assets
-      .map(
-        (a) => `
+      .map((a) => {
+        const origin = a.origin_tool || a.sourceTool || 'mission';
+        return `
         <tr>
-          <td>${a.name}</td>
+          <td><div class="asset-name"><span>${a.name}</span><span class="origin-chip">${origin}</span></div></td>
           <td>${a.type}</td>
           <td>${(a.roleTags || []).join(', ')}</td>
           <td>${a.ownerElement || ''}</td>
-          <td>${a.sourceTool || ''}</td>
           <td>${a.critical ? 'Critical' : ''}</td>
           <td>${a.notes || ''}</td>
           <td class="asset-actions">
@@ -634,10 +750,10 @@
             <button class="secondary-btn" data-dup="${a.id}">Duplicate</button>
             <button class="danger-btn" data-remove="${a.id}">Delete</button>
           </td>
-        </tr>`
-      )
+        </tr>`;
+      })
       .join('');
-    wrapper.innerHTML = `<table><thead><tr><th>Name</th><th>Type</th><th>Role Tags</th><th>Owner/Element</th><th>Source Tool</th><th>Critical</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+    wrapper.innerHTML = `<table><thead><tr><th>Name / Origin</th><th>Type</th><th>Role Tags</th><th>Owner/Element</th><th>Critical</th><th>Notes</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
     wrapper.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => removeAsset(btn.dataset.remove)));
     wrapper.querySelectorAll('[data-dup]').forEach((btn) => btn.addEventListener('click', () => duplicateAsset(btn.dataset.dup)));
     wrapper.querySelectorAll('[data-edit]').forEach((btn) => btn.addEventListener('click', () => editAsset(btn.dataset.edit)));
@@ -650,15 +766,18 @@
     if (!currentMission.assignments?.length) {
       container.innerHTML = '<p class="muted">No role assignments yet.</p>';
     } else {
+      const assetLookup = Object.fromEntries(currentMission.assets.map((asset) => [asset.id, asset]));
       const rows = currentMission.assignments
         .map((a) => {
+          const origin = assetLookup[a.assetId]?.origin_tool || assetLookup[a.assetId]?.sourceTool || 'mission';
           return `
             <tr>
               <td>
                 <select data-assign-field="assetId" data-id="${a.id}">
                   ${currentMission.assets
                     .map(
-                      (asset) => `<option value="${asset.id}" ${asset.id === a.assetId ? 'selected' : ''}>${asset.name}</option>`
+                      (asset) =>
+                        `<option value="${asset.id}" ${asset.id === a.assetId ? 'selected' : ''}>${asset.name} (${asset.origin_tool || asset.sourceTool || 'mission'})</option>`
                     )
                     .join('')}
                 </select>
@@ -684,6 +803,7 @@
               </td>
               <td><input data-assign-field="role" data-id="${a.id}" value="${a.role || ''}" placeholder="Role" /></td>
               <td><input data-assign-field="notes" data-id="${a.id}" value="${a.notes || ''}" placeholder="Employment notes" /></td>
+              <td class="center"><span class="origin-chip">${origin}</span></td>
               <td class="center"><input type="checkbox" data-assign-field="critical" data-id="${a.id}" ${a.critical ? 'checked' : ''}></td>
               <td class="center"><input type="checkbox" data-assign-field="requiresComms" data-id="${a.id}" ${
                 a.requiresComms ? 'checked' : ''
@@ -692,7 +812,7 @@
             </tr>`;
         })
         .join('');
-      container.innerHTML = `<table><thead><tr><th>Asset</th><th>Phase</th><th>Element</th><th>Role</th><th>Notes</th><th>Critical</th><th>Needs Comms</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      container.innerHTML = `<table><thead><tr><th>Asset</th><th>Phase</th><th>Element</th><th>Role</th><th>Notes</th><th>Origin</th><th>Critical</th><th>Needs Comms</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     container.querySelectorAll('[data-assign-field]').forEach((el) => {
       el.addEventListener('input', onAssignmentFieldChange);
@@ -1012,6 +1132,7 @@
     document.getElementById('downloadJsonBtn').addEventListener('click', downloadMissionJson);
 
     document.getElementById('missionName').addEventListener('input', (e) => updateMetaField('name', e.target.value));
+    document.getElementById('missionPreset').addEventListener('change', (e) => applyMissionPreset(e.target.value));
     document.getElementById('missionType').addEventListener('input', (e) => updateMetaField('missionType', e.target.value));
     document.getElementById('missionAo').addEventListener('input', (e) => updateMetaField('ao', e.target.value));
     document.getElementById('missionUnit').addEventListener('input', (e) => updateMetaField('unitOrDetachment', e.target.value));
@@ -1125,7 +1246,9 @@
       .filter(Boolean);
     const ownerElement = prompt('Owner/Element?', '');
     const notes = prompt('Notes?', '');
-    currentMission.assets.push({ id: uuid(), name, type, sourceTool, roleTags, ownerElement, notes, critical: false });
+    currentMission.assets.push(
+      ensureOriginTool({ id: uuid(), name, type, sourceTool, roleTags, ownerElement, notes, critical: false }, 'mission')
+    );
     renderAssets();
     renderPhases();
     renderAssignmentMatrix();
@@ -1155,7 +1278,7 @@
   function duplicateAsset(id) {
     const asset = currentMission.assets.find((a) => a.id === id);
     if (!asset) return;
-    const copy = { ...asset, id: uuid(), name: `${asset.name} (copy)` };
+    const copy = ensureOriginTool({ ...asset, id: uuid(), name: `${asset.name} (copy)` }, asset.origin_tool || 'mission');
     currentMission.assets.push(copy);
     renderAssets();
     renderAssignmentMatrix();
@@ -1176,7 +1299,7 @@
     const ownerElement = prompt('Owner/Element?', asset.ownerElement || '') || asset.ownerElement;
     const notes = prompt('Notes?', asset.notes || '') || asset.notes;
     const critical = confirm('Mark as critical to mission success?');
-    Object.assign(asset, { name, type, sourceTool, roleTags, ownerElement, notes, critical });
+    Object.assign(asset, ensureOriginTool({ name, type, sourceTool, roleTags, ownerElement, notes, critical }, 'mission'));
     renderAssets();
     renderAssignmentMatrix();
     renderPhases();
@@ -1388,19 +1511,21 @@
   function buildMissionProjectPayload() {
     syncMetaFromMission();
     const baseProject = normalizeMissionProject(project);
+    const missionAssets = (currentMission.assets || []).map((asset) => ensureOriginTool(asset));
+    currentMission.assets = missionAssets;
     const links = baseProject.mesh_links?.length
       ? baseProject.mesh_links
       : baseProject.mission?.imports?.mesh?.links || currentMission.imports?.mesh?.links || [];
     const existingNodeIds = new Set((baseProject.nodes || []).map((n) => n.id));
-    const nodesFromAssets = currentMission.assets
+    const nodesFromAssets = missionAssets
       .filter((a) => (a.type === 'NODE' || a.type === 'MESH_ELEMENT') && !existingNodeIds.has(a.id))
       .map((a) => convertAssetToElement(a, a.type === 'MESH_ELEMENT' ? 'mesh' : 'node'));
     const existingPlatformIds = new Set((baseProject.platforms || []).map((p) => p.id));
-    const platformsFromAssets = currentMission.assets
+    const platformsFromAssets = missionAssets
       .filter((a) => (a.type === 'UXS' || a.type === 'PLATFORM') && !existingPlatformIds.has(a.id))
       .map((a) => convertAssetToElement(a, 'uxs'));
     const existingKitIds = new Set((baseProject.kits || []).map((k) => k.id));
-    const kitsFromAssets = currentMission.assets
+    const kitsFromAssets = missionAssets
       .filter((a) => a.type === 'KIT' && !existingKitIds.has(a.id))
       .map((a) => convertAssetToElement(a, 'kit'));
 
@@ -1429,7 +1554,7 @@
       schemaVersion: MISSIONPROJECT_SCHEMA_VERSION,
       origin_tool: 'mission',
       meta: { ...baseProject.meta, ...project.meta },
-      mission: missionPayload,
+      mission: { ...missionPayload, assets: missionAssets },
       environment: { ...baseProject.environment, ...environment },
       constraints: buildConstraintArrayFromMission(missionPayload),
       nodes: [...(baseProject.nodes || []), ...nodesFromAssets],
@@ -1440,37 +1565,42 @@
   }
 
   function convertAssetToElement(asset, origin_tool = 'mission') {
+    const normalized = ensureOriginTool(asset, origin_tool);
     return {
-      id: asset.id || uuid(),
-      name: asset.name,
-      role: (asset.roleTags || []).join(', '),
-      rf_band: asset.rfBand || asset.frequency || '',
-      power_draw_watts: asset.powerDrawWatts || null,
-      battery_wh: asset.batteryWh || null,
-      endurance_hours: getAssetEnduranceHours(asset),
-      lat: asset.lat || asset.latitude || null,
-      lon: asset.lon || asset.lng || asset.longitude || null,
-      elevation: asset.elevation || null,
-      origin_tool
+      id: normalized.id || uuid(),
+      name: normalized.name,
+      role: (normalized.roleTags || []).join(', '),
+      rf_band: normalized.rfBand || normalized.frequency || '',
+      power_draw_watts: normalized.powerDrawWatts || null,
+      battery_wh: normalized.batteryWh || null,
+      endurance_hours: getAssetEnduranceHours(normalized),
+      lat: normalized.lat || normalized.latitude || null,
+      lon: normalized.lon || normalized.lng || normalized.longitude || null,
+      elevation: normalized.elevation || null,
+      origin_tool: normalized.origin_tool || origin_tool
     };
   }
 
   function convertElementToAsset(element, type, sourceTool = 'mission') {
+    const normalized = ensureOriginTool(element, sourceTool || 'mission');
     return {
-      id: element.id || uuid(),
-      name: element.name || `${type} asset`,
+      id: normalized.id || uuid(),
+      name: normalized.name || `${type} asset`,
       type,
-      sourceTool,
-      roleTags: element.role ? element.role.split(',').map((r) => r.trim()).filter(Boolean) : element.roleTags || [],
-      ownerElement: element.owner || element.ownerElement || '',
-      notes: element.notes || '',
-      rfBand: element.rf_band || element.rfBand,
-      batteryWh: element.battery_wh,
-      powerDrawWatts: element.power_draw_watts,
-      enduranceHours: element.endurance_hours,
-      lat: element.lat,
-      lon: element.lon,
-      elevation: element.elevation || null
+      sourceTool: normalized.sourceTool,
+      origin_tool: normalized.origin_tool,
+      roleTags: normalized.role
+        ? normalized.role.split(',').map((r) => r.trim()).filter(Boolean)
+        : normalized.roleTags || [],
+      ownerElement: normalized.owner || normalized.ownerElement || '',
+      notes: normalized.notes || '',
+      rfBand: normalized.rf_band || normalized.rfBand,
+      batteryWh: normalized.battery_wh,
+      powerDrawWatts: normalized.power_draw_watts,
+      enduranceHours: normalized.endurance_hours,
+      lat: normalized.lat,
+      lon: normalized.lon,
+      elevation: normalized.elevation || null
     };
   }
 
@@ -1526,7 +1656,7 @@
     const existing = currentMission.assets || [];
     const mergedMap = new Map();
     [...fromProject, ...existing].forEach((asset) => {
-      if (!mergedMap.has(asset.id)) mergedMap.set(asset.id, asset);
+      if (!mergedMap.has(asset.id)) mergedMap.set(asset.id, ensureOriginTool(asset));
     });
     currentMission.assets = Array.from(mergedMap.values());
   }
