@@ -1,0 +1,26 @@
+[project]
+name = "architect-companion-mcp"
+version = "0.2.0"
+description = "Offline-first MCP server that complements Ceradon Architect with UxS signal-intelligence workflows."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Architect Companion Team" }]
+dependencies = [
+  "mcp>=1.2.0",
+]
+
+[project.scripts]
+architect-companion-mcp = "architect_companion_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
