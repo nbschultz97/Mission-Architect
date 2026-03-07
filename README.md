@@ -1,27 +1,34 @@
-# Mission Architect
+# Architect Companion MCP Server
 
-Static single-page app for Ceradon Mission Architect, served via GitHub Pages with the custom domain `mission.ceradonsystems.com`.
+This repository is a clean, offline-first MCP server intended to **complement Ceradon Architect** by providing UxS signal-intelligence tooling with WiFi CSI pose detection as the technical anchor.
 
-## Mission planner highlights
-- Mission metadata now includes duration (with 24/48/72 hr presets), altitude band, and temperature band. Metadata is stored under `missionMeta` and persisted in `localStorage`.
-- Import Node/Platform/Mesh/Kits or full MissionProject bundles directly from Architect tools and keep them offline.
-- Assign assets to phases/roles, flag critical dependencies, and mark tasks that require comms redundancy. Phase summaries stay synced to the shared MissionProject.
-- Feasibility panel estimates sorties vs. endurance, counts critical platforms, and flags sustainment/comms risk.
-- Generate printable mission cards plus GeoJSON overlays (ATAK-compatible) for assets with latitude/longitude.
+## Scope
 
-## Hosting notes
-- Pages expects `index.html` at the repository root; all site assets now live at the root to align with GitHub Pages.
-- Custom domain is set via the `CNAME` file.
+- MCP tools over stdio for integration into Architect-adjacent workflows.
+- Pose-centric mission blueprints (through-wall skeletal inference pipeline).
+- Local append-only telemetry storage for disconnected edge nodes.
+- Payload normalizer for Architect-ready pose overlays.
 
-## Import formats
-- **Node / Platform JSON**: arrays of objects with at minimum `name`. Optional fields honored: `id`, `roleTags`, `owner`, `notes`, `critical`, `enduranceHours` (or `enduranceMinutes` / `endurance`), `lat`/`lon` (or `latitude`/`longitude`).
-- **Mesh JSON**: should include a `links` array with `from`, `to`, and `quality` (e.g., `Marginal`, `Unlikely`) so comms risk can be flagged for assignments marked "Needs Comms".
+## Quickstart
 
-## Mission card and overlay export
-- Add role assignments to generate per-team mission cards (print-friendly). Use the **Print / Save as PDF** control from the Mission Brief panel.
-- Use **Export Mission Overlay** to download a GeoJSON file containing points for any assets with coordinates, ready for ATAK or other mapping tools.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+architect-companion-mcp
+```
 
-## MissionProject schema and exports
-- Mission Architect now reads/writes the shared **MissionProject** JSON schema (v2.0.0) used across the Architect Stack. See `docs/mission_project_schema.md`.
-- Export controls produce full MissionProject bundles plus GeoJSON overlays and a CoT-like stub for ATAK-style ingest. Details in `docs/atak_exports.md`.
-- A neutral demo mission is included to quickly populate phases, assets, constraints, and environment settings without any real-world references.
+## Available MCP tools
+
+- `health`
+- `list_capabilities_for_architect`
+- `get_blueprint_for_architect`
+- `record_observation`
+- `build_architect_payload`
+- `propose_edge_pose_pipeline`
+
+## Edge deployment notes
+
+- Python 3.9+ target for Raspberry Pi 4/5 and Jetson Nano.
+- Default storage path: `./runtime_data` (override with `ARCHITECT_COMPANION_DATA_DIR`).
+- JSONL persistence is used to avoid dependency-heavy database stacks in air-gapped environments.
