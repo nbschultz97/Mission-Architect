@@ -1,31 +1,63 @@
-from architect_companion_mcp.catalog import list_capabilities
+from architect_companion_mcp.catalog import check_compatibility, get_blueprint, list_components
 from architect_companion_mcp.server import (
-    build_architect_payload,
+    estimate_flight_time,
     health,
-    propose_edge_pose_pipeline,
+    recommend_configuration,
 )
 
 
 def test_health_profile():
-    assert health()["profile"] == "ceradon-architect-companion"
+    result = health()
+    assert result["status"] == "ok"
+    assert result["profile"] == "ceradon-cots-architect"
 
 
-def test_capabilities_include_architect_export():
-    slugs = {item["slug"] for item in list_capabilities()}
-    assert "architect_export" in slugs
+def test_list_components_returns_all():
+    components = list_components()
+    assert len(components) > 0
+    slugs = {c["slug"] for c in components}
+    assert "pixhawk6c" in slugs
+    assert "here3_gps" in slugs
 
 
-def test_pipeline_quantization_for_rpi4():
-    out = propose_edge_pose_pipeline(chipset="intel-5300", compute_tier="rpi4", fps_target=6)
-    assert out["tradeoffs"]["quantized_model"] is True
-    assert "infer:WiPose-lite-int8" in out["pipeline"]
+def test_list_components_filter_by_category():
+    fc = list_components(category="flight_controller")
+    assert all(c["category"] == "flight_controller" for c in fc)
+    assert len(fc) >= 2
 
 
-def test_build_architect_payload_schema():
-    payload = build_architect_payload(
-        track_id="target-1",
-        pose_keypoints=[{"x": 0.1, "y": 0.2, "score": 0.9}],
-        confidence=0.87,
+def test_check_compatibility_pass():
+    result = check_compatibility(["pixhawk6c", "here3_gps", "holybro_pm02"])
+    assert result["compatible"] is True
+    assert result["total_weight_g"] > 0
+
+
+def test_check_compatibility_unknown():
+    result = check_compatibility(["pixhawk6c", "nonexistent_part"])
+    assert result["compatible"] is False
+    assert "Unknown" in result["reason"]
+
+
+def test_get_blueprint():
+    bp = get_blueprint("recon-multirotor")
+    assert bp["name"] == "recon-multirotor"
+    assert "stages" in bp
+    assert len(bp["stages"]) > 0
+
+
+def test_estimate_flight_time():
+    result = estimate_flight_time(
+        battery_mah=5200,
+        platform_weight_g=1500,
+        payload_weight_g=200,
     )
-    assert payload["schema"] == "architect.pose.v1"
-    assert payload["overlay_ready"] is True
+    assert result["safe_endurance_min"] > 0
+    assert result["reserve_pct"] == 20
+    assert result["total_weight_g"] == 1700
+
+
+def test_recommend_configuration_rpi5():
+    config = recommend_configuration(compute_tier="rpi5", mission_type="recon-multirotor")
+    assert config["vision_capable"] is True
+    assert "pixhawk6c" in config["recommended_components"]
+    assert config["compute_tier"] == "rpi5"

@@ -1,13 +1,15 @@
-# Architect Companion MCP Server
+# Architect MCP Server
 
-This repository is a clean, offline-first MCP server intended to **complement Ceradon Architect** by providing UxS signal-intelligence tooling with WiFi CSI pose detection as the technical anchor.
+Offline-first MCP server for **COTS robotics mission planning**, designed to complement the [Ceradon Architect](https://ceradonsystems.com) suite (COTS-Architect). Provides tools for unmanned systems (UxS) mission design, component selection, compatibility checking, and edge deployment configuration.
 
 ## Scope
 
 - MCP tools over stdio for integration into Architect-adjacent workflows.
-- Pose-centric mission blueprints (through-wall skeletal inference pipeline).
+- COTS component catalog with compatibility checking for drone/robot builds.
+- Mission blueprint generation for UxS operations.
+- Flight time and endurance estimation based on platform configuration.
 - Local append-only telemetry storage for disconnected edge nodes.
-- Payload normalizer for Architect-ready pose overlays.
+- Edge deployment configuration for constrained compute platforms.
 
 ## Quickstart
 
@@ -18,17 +20,21 @@ pip install -e .
 architect-companion-mcp
 ```
 
-## Available MCP tools
+## Available MCP Tools
 
-- `health`
-- `list_capabilities_for_architect`
-- `get_blueprint_for_architect`
-- `record_observation`
-- `build_architect_payload`
-- `propose_edge_pose_pipeline`
+| Tool | Description |
+|------|-------------|
+| `health` | Server health check and mission profile status |
+| `list_components` | Browse the COTS component catalog (filters by category) |
+| `check_compatibility` | Verify compatibility between selected components |
+| `generate_mission_blueprint` | Create a mission blueprint for a given UxS operation type |
+| `estimate_flight_time` | Estimate flight time based on platform weight, battery, and payload |
+| `recommend_configuration` | Get a recommended system configuration for a target compute tier |
+| `record_observation` | Persist telemetry observations to local JSONL storage |
 
-## Edge deployment notes
+## Edge Deployment Notes
 
 - Python 3.9+ target for Raspberry Pi 4/5 and Jetson Nano.
 - Default storage path: `./runtime_data` (override with `ARCHITECT_COMPANION_DATA_DIR`).
-- JSONL persistence is used to avoid dependency-heavy database stacks in air-gapped environments.
+- JSONL persistence avoids dependency-heavy database stacks in air-gapped environments.
+- All tools operate fully offline — no cloud dependencies.

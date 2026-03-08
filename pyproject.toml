@@ -1,10 +1,10 @@
 [project]
 name = "architect-companion-mcp"
-version = "0.2.0"
-description = "Offline-first MCP server that complements Ceradon Architect with UxS signal-intelligence workflows."
+version = "0.3.0"
+description = "Offline-first MCP server for COTS robotics mission planning. Complements the Ceradon Architect suite."
 readme = "README.md"
 requires-python = ">=3.9"
-authors = [{ name = "Architect Companion Team" }]
+authors = [{ name = "Ceradon Systems" }]
 dependencies = [
   "mcp>=1.2.0",
 ]
